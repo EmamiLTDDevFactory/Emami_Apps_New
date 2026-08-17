@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import {
   Landmark, Truck, Activity, Receipt, Home, LayoutGrid, Star, Clock,
   Grid3x3, HelpCircle, Settings,
@@ -11,20 +10,23 @@ export const CATEGORIES: CategoryFilter[] = ['All', 'Finance', 'Operations'];
  * Live app URLs. Every real app renders inside a WebView on the launch screen
  * via this URL.
  *
- * Dispatch Tracker, RC Portal and MoldHealthCheck send no framing-restriction
- * headers (confirmed directly), so they embed fine cross-origin as-is on both
- * web and native — no proxy needed.
+ * All four send no framing-restriction headers (confirmed directly against
+ * each domain), so all four embed fine as a direct cross-origin iframe/WebView
+ * on both web and native — no proxy needed. (An earlier same-origin proxy
+ * attempt for Non CTC Expense was reverted: it broke the app's own
+ * client-side router, which reads the browser's real URL and doesn't
+ * recognize being served under /apps/expense — a proxy can rewrite what the
+ * server fetches, but not what the browser believes its own address is.)
  *
- * Non CTC Expense is the one app actually deployed on Render right now, and
- * is the one routed through a same-origin `/apps/expense` proxy path on web
- * (see server/index.js for production, metro.config.js for local dev). Native
- * WebView has no same-origin requirement, so it hits the real URL directly.
+ * The hub's own address bar reflects which app you're viewing via React
+ * Navigation's linking config (see App.tsx) — that's the routing to show,
+ * independent of each iframe's own real URL.
  */
 export const EMBEDDED_APP_URLS: Record<string, string> = {
   hr: 'https://main.d24jo2310130zc.amplifyapp.com', // Dispatch Tracker
   finance: 'https://main.due5mcy3my82.amplifyapp.com', // RC Portal
   inventory: 'https://mould.emamiapps.in', // MoldHealthCheck
-  expense: Platform.OS === 'web' ? '/apps/expense' : 'https://non-ctc-expense.onrender.com/zexpense/', // Non CTC Expense
+  expense: 'https://non-ctc-expense.onrender.com/zexpense/', // Non CTC Expense
 };
 
 const RAW_APPS: AppItem[] = [

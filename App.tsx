@@ -20,6 +20,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { NotificationsUIProvider } from './src/context/NotificationsUIContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import { linking } from './src/navigation/linking';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -49,7 +50,7 @@ export default function App() {
         <AuthProvider>
           <FavoritesProvider>
             <NotificationsUIProvider>
-              <NavigationContainer>
+              <NavigationContainer linking={linking}>
                 <StatusBar style="dark" />
                 <RootNavigator />
               </NavigationContainer>
