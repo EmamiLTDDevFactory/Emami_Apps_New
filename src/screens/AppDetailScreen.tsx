@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,14 +10,40 @@ import EmbeddedWebView from '../components/EmbeddedWebView';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppDetail'>;
 
+// A relative URL (starting with "/") means the app is genuinely merged into
+// this hub's own web build and served same-origin (see mockData.ts) — that
+// gets a full page navigation, not a WebView, since it's not a separate site
+// being embedded. An absolute URL is a real cross-origin app, which still
+// gets the WebView/iframe treatment.
+function isSameOriginRoute(url: string) {
+  return Platform.OS === 'web' && url.startsWith('/');
+}
+
 export default function AppDetailScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
   const app = appById(route.params.appId);
+
+  useEffect(() => {
+    if (app?.url && isSameOriginRoute(app.url)) {
+      // replace, not href: this hub screen shouldn't stay in history as an
+      // entry of its own — otherwise browser Back re-mounts it and its
+      // redirect fires again, bouncing straight back into the embedded app.
+      window.location.replace(app.url);
+    }
+  }, [app?.url]);
 
   if (!app) {
     return (
       <View style={styles.notFound}>
         <Text style={styles.notFoundText}>Application not found.</Text>
+      </View>
+    );
+  }
+
+  if (app.url && isSameOriginRoute(app.url)) {
+    return (
+      <View style={styles.notFound}>
+        <ActivityIndicator size="large" color={colors.rust} />
       </View>
     );
   }
@@ -73,7 +99,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   name: {
-    fontFamily: fonts.serifSemiBold,
+    fontFamily: fonts.sansBold,
     fontSize: 19,
     color: colors.white,
   },

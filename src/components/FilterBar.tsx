@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SlidersHorizontal, Check } from 'lucide-react-native';
-import { colors, fonts, radii } from '../theme/tokens';
+import { colors, fonts, radii, gradients } from '../theme/tokens';
 import { CATEGORIES } from '../data/mockData';
 import type { CategoryFilter, SortOption } from '../types';
 
@@ -22,13 +23,27 @@ export default function FilterBar({ category, onCategoryChange, sort, onSortChan
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
         {CATEGORIES.map((c) => {
           const active = category === c;
+          if (active) {
+            return (
+              <Pressable key={c} onPress={() => onCategoryChange(c)} style={styles.chipActiveShadow}>
+                <LinearGradient
+                  colors={gradients.primary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.chip}
+                >
+                  <Text style={[styles.chipText, { color: colors.white }]}>{c}</Text>
+                </LinearGradient>
+              </Pressable>
+            );
+          }
           return (
             <Pressable
               key={c}
               onPress={() => onCategoryChange(c)}
-              style={[styles.chip, { borderColor: active ? colors.rust : colors.border, backgroundColor: active ? colors.rust : colors.white }]}
+              style={[styles.chip, { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white }]}
             >
-              <Text style={[styles.chipText, { color: active ? colors.white : colors.inkSoft }]}>{c}</Text>
+              <Text style={[styles.chipText, { color: colors.inkSoft }]}>{c}</Text>
             </Pressable>
           );
         })}
@@ -71,7 +86,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    borderWidth: 1,
+  },
+  chipActiveShadow: {
+    borderRadius: radii.pill,
+    shadowColor: colors.rust,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   chipText: {
     fontSize: 12.5,

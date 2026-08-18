@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import ScreenScaffold from '../components/ScreenScaffold';
 import { RECENT, appById } from '../data/mockData';
-import { colors, fonts, radii, catColor } from '../theme/tokens';
+import { colors, fonts, radii, appColor } from '../theme/tokens';
 import type { RootStackParamList } from '../navigation/types';
 
 export default function RecentScreen() {
@@ -21,7 +21,7 @@ export default function RecentScreen() {
             const app = appById(r.id);
             if (!app) return null;
             const Icon = app.icon;
-            const accent = catColor(app.cat);
+            const accent = appColor(app.id);
             return (
               <Pressable
                 key={r.id}
@@ -48,7 +48,7 @@ export default function RecentScreen() {
 const styles = StyleSheet.create({
   scroll: { padding: 16, paddingBottom: 40 },
   title: {
-    fontFamily: fonts.serifSemiBold,
+    fontFamily: fonts.sansBold,
     fontSize: 22,
     color: colors.ink,
     marginBottom: 16,

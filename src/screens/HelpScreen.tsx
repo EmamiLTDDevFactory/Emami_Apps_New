@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   title: {
-    fontFamily: fonts.serifSemiBold,
+    fontFamily: fonts.sansBold,
     fontSize: 22,
     color: colors.ink,
     marginBottom: 10,

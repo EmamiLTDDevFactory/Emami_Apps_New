@@ -11,6 +11,8 @@
     "android",
     "ios",
     "server",
-    "dist"
+    "dist",
+    "scripts",
+    "embedded-apps"
   ]
 }

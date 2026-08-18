@@ -1,6 +1,7 @@
 import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { colors } from '../theme/tokens';
+import { useIsWideScreen } from '../hooks/useIsWideScreen';
 import CustomDrawerContent from './CustomDrawerContent';
 import HomeScreen from '../screens/HomeScreen';
 import AppListScreen from '../screens/AppListScreen';
@@ -12,13 +13,20 @@ import type { DrawerParamList } from './types';
 const Drawer = createDrawerNavigator<DrawerParamList>();
 
 export default function DrawerNavigator() {
+  const isWideScreen = useIsWideScreen();
+
   return (
     <Drawer.Navigator
       screenOptions={{
         headerShown: false,
-        drawerType: 'front',
-        drawerStyle: { width: 260, backgroundColor: colors.plum },
-        overlayColor: 'rgba(42,30,34,0.4)',
+        drawerType: isWideScreen ? 'permanent' : 'front',
+        drawerStyle: {
+          width: 260,
+          backgroundColor: colors.white,
+          borderRightWidth: isWideScreen ? 1 : 0,
+          borderRightColor: colors.border,
+        },
+        overlayColor: 'rgba(31,27,51,0.35)',
         swipeEdgeWidth: 40,
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}

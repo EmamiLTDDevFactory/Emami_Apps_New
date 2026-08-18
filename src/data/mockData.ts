@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import {
   Landmark, Truck, Activity, Receipt, Home, LayoutGrid, Star, Clock,
   Grid3x3, HelpCircle, Settings,
@@ -10,23 +11,33 @@ export const CATEGORIES: CategoryFilter[] = ['All', 'Finance', 'Operations'];
  * Live app URLs. Every real app renders inside a WebView on the launch screen
  * via this URL.
  *
- * All four send no framing-restriction headers (confirmed directly against
- * each domain), so all four embed fine as a direct cross-origin iframe/WebView
- * on both web and native — no proxy needed. (An earlier same-origin proxy
- * attempt for Non CTC Expense was reverted: it broke the app's own
- * client-side router, which reads the browser's real URL and doesn't
- * recognize being served under /apps/expense — a proxy can rewrite what the
- * server fetches, but not what the browser believes its own address is.)
+ * On web, all four are now genuinely same-origin: their actual frontends
+ * (fixed to be base-path aware — see embedded-apps/) are built and served
+ * directly by this hub's own server at /apps/expense, /apps/dispatch-tracker,
+ * /apps/rc-portal and /apps/mouldhealthcheck — not a proxy, not an iframe to
+ * another domain. A relative URL here is the signal AppDetailScreen uses to
+ * do a full page navigation instead of rendering a WebView.
  *
- * The hub's own address bar reflects which app you're viewing via React
- * Navigation's linking config (see App.tsx) — that's the routing to show,
- * independent of each iframe's own real URL.
+ * Their backend/API endpoints are untouched: Non CTC Expense and RC Portal
+ * each get their own real backend brought in too (see each app's own
+ * backend/ folder under embedded-apps/, real Azure/SAP credentials via its
+ * gitignored backend/.env); Dispatch Tracker and MoldHealthCheck need no
+ * backend of their own — each frontend already hardcodes an absolute
+ * external API domain that works directly (confirmed by testing it), unaffected
+ * by where its own frontend is hosted.
+ *
+ * Native has no such merged build, so it keeps hitting each real external
+ * URL via WebView as before.
  */
 export const EMBEDDED_APP_URLS: Record<string, string> = {
-  hr: 'https://main.d24jo2310130zc.amplifyapp.com', // Dispatch Tracker
-  finance: 'https://main.due5mcy3my82.amplifyapp.com', // RC Portal
-  inventory: 'https://mould.emamiapps.in', // MoldHealthCheck
-  expense: 'https://non-ctc-expense.onrender.com/zexpense/', // Non CTC Expense
+  hr: Platform.OS === 'web' ? '/apps/dispatch-tracker' : 'https://main.d24jo2310130zc.amplifyapp.com', // Dispatch Tracker
+  finance: Platform.OS === 'web' ? '/apps/rc-portal' : 'https://main.due5mcy3my82.amplifyapp.com', // RC Portal
+  // MoldHealthCheck's auth-check redirect only lives in its own top-level
+  // splash screen (app/index.tsx), which is skipped when navigating straight
+  // to /apps/mouldhealthcheck — so point directly at the same screen that
+  // splash itself redirects to, instead of the bare app root.
+  inventory: Platform.OS === 'web' ? '/apps/mouldhealthcheck/welcome' : 'https://mould.emamiapps.in', // MoldHealthCheck
+  expense: Platform.OS === 'web' ? '/apps/expense' : 'https://non-ctc-expense.onrender.com/zexpense/', // Non CTC Expense
 };
 
 const RAW_APPS: AppItem[] = [
@@ -69,6 +80,21 @@ export const NAV: NavItem[] = [
 export const CURRENT_USER = {
   name: 'Riya Sen',
   email: 'r.sen@emamigroup.com',
+  mobile: '98300 11234',
+  role: 'Employee',
+  status: 'Active',
+  lastLogin: 'Today, 9:42 AM',
+};
+
+export const ACTIVITY_STATS = {
+  sessionsTotal: 1,
+  logins: 1,
+  timeSpent: '—',
+  appsOpened: 2,
+  downloads: 0,
+  favoritesAdded: 2,
+  notificationsRead: 1,
+  mostUsedApp: 'Dispatch Tracker',
 };
 
 export function appById(id: string) {

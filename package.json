@@ -8,6 +8,7 @@
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
     "@expo-google-fonts/ibm-plex-serif": "^0.4.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-masked-view/masked-view": "0.3.2",
     "@react-navigation/drawer": "^7.13.8",
     "@react-navigation/native": "^7.3.16",
     "@react-navigation/native-stack": "^7.18.8",
@@ -30,8 +31,11 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-lambda": "^3.700.0",
     "@types/react": "~19.2.2",
+    "archiver": "^7.0.1",
     "babel-preset-expo": "^57.0.7",
+    "dotenv": "^17.4.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -39,7 +43,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "expo export --platform web",
+    "deploy:lambdas": "node scripts/deploy-lambdas.js",
+    "build:web": "expo export --platform web --clear",
+    "build:embedded": "node scripts/build-embedded-apps.js",
     "serve": "node server/index.js"
   }
 }

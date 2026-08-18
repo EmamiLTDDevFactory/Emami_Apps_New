@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -16,7 +16,7 @@ import {
   IBMPlexSerif_600SemiBold,
 } from '@expo-google-fonts/ibm-plex-serif';
 
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, loadPersistedLoginState } from './src/context/AuthContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { NotificationsUIProvider } from './src/context/NotificationsUIContext';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -34,20 +34,32 @@ export default function App() {
     IBMPlexSerif_600SemiBold,
   });
 
+  const [authChecked, setAuthChecked] = useState(false);
+  const [initialLoggedIn, setInitialLoggedIn] = useState(false);
+
+  useEffect(() => {
+    loadPersistedLoginState().then((loggedIn) => {
+      setInitialLoggedIn(loggedIn);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  const ready = fontsLoaded && authChecked;
+
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
+    if (ready) {
       await SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [ready]);
 
-  if (!fontsLoaded) {
+  if (!ready) {
     return null;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <SafeAreaProvider>
-        <AuthProvider>
+        <AuthProvider initialLoggedIn={initialLoggedIn}>
           <FavoritesProvider>
             <NotificationsUIProvider>
               <NavigationContainer linking={linking}>

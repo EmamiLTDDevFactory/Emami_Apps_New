@@ -3,7 +3,7 @@ services:
     name: emami-apps-hub
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build:web
+    buildCommand: npm install && npm run build:web && npm run build:embedded
     startCommand: npm run serve
     envVars:
       - key: NODE_VERSION

@@ -30,8 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files — never commit real credentials. Any .env this project
+# needs at build/deploy time gets set as an environment variable on the
+# hosting platform (Amplify console) instead, same as the other 4 apps do.
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo

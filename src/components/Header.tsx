@@ -5,6 +5,7 @@ import { Search, Bell, Menu, ChevronDown, User, Settings, LogOut } from 'lucide-
 import { colors, fonts, radii } from '../theme/tokens';
 import { NOTIFICATIONS, CURRENT_USER, unreadNotificationsCount } from '../data/mockData';
 import { useNotificationsUI } from '../context/NotificationsUIContext';
+import { useIsWideScreen } from '../hooks/useIsWideScreen';
 import Avatar from './Avatar';
 
 interface HeaderProps {
@@ -19,24 +20,32 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
   const insets = useSafeAreaInsets();
   const { isOpen: notifOpen, openPanel: openNotifPanel, closePanel: closeNotifPanel } = useNotificationsUI();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const unread = unreadNotificationsCount;
+  const isWideScreen = useIsWideScreen();
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + 10 }]}>
       <View style={styles.row}>
-        <Pressable onPress={onOpenMenu} hitSlop={10} style={styles.iconBtn}>
-          <Menu size={22} color={colors.ink} />
-        </Pressable>
+        {!isWideScreen && (
+          <Pressable onPress={onOpenMenu} hitSlop={10} style={styles.iconBtn}>
+            <Menu size={22} color={colors.ink} />
+          </Pressable>
+        )}
 
-        <View style={styles.searchBox}>
-          <Search size={15} color={colors.inkSoft} />
-          <TextInput
-            value={searchValue}
-            onChangeText={onSearchChange}
-            placeholder="Search applications…"
-            placeholderTextColor={colors.inkSoft}
-            style={styles.searchInput}
-          />
+        <View style={styles.searchWrap}>
+          <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
+            <Search size={15} color={searchFocused ? colors.rust : colors.inkSoft} />
+            <TextInput
+              value={searchValue}
+              onChangeText={onSearchChange}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Search anything…"
+              placeholderTextColor={colors.inkSoft}
+              style={styles.searchInput}
+            />
+          </View>
         </View>
 
         <Pressable onPress={openNotifPanel} hitSlop={10} style={styles.iconBtn}>
@@ -47,12 +56,19 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
         </Pressable>
 
         <Pressable onPress={() => setProfileOpen(true)} hitSlop={8} style={styles.profileBtn}>
-          <Avatar name={CURRENT_USER.name} size={30} />
-          <ChevronDown size={14} color={colors.inkSoft} />
+          <View style={styles.avatarRing}>
+            <Avatar name={CURRENT_USER.name} size={32} />
+            <View style={styles.statusDot} />
+          </View>
+          <View style={styles.profileTextWrap}>
+            <Text style={styles.profileBtnName} numberOfLines={1}>{CURRENT_USER.name}</Text>
+            <View style={styles.profileBtnSubRow}>
+              <Text style={styles.profileBtnSub}>Account</Text>
+              <ChevronDown size={12} color={colors.inkSoft} />
+            </View>
+          </View>
         </Pressable>
       </View>
-
-      <View style={[styles.accentBar]} />
 
       <Modal visible={notifOpen} transparent animationType="fade" onRequestClose={closeNotifPanel}>
         <Pressable style={styles.backdrop} onPress={closeNotifPanel}>
@@ -100,6 +116,8 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
 const styles = StyleSheet.create({
   wrap: {
     backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   row: {
     flexDirection: 'row',
@@ -111,17 +129,31 @@ const styles = StyleSheet.create({
   iconBtn: {
     padding: 6,
   },
-  searchBox: {
+  searchWrap: {
     flex: 1,
+    alignItems: 'center',
+  },
+  searchBox: {
+    width: '100%',
+    maxWidth: 460,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: colors.cream2,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingHorizontal: 12,
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
     height: 38,
+  },
+  searchBoxFocused: {
+    borderColor: colors.rust,
+    backgroundColor: colors.white,
+    shadowColor: colors.rust,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
@@ -145,12 +177,44 @@ const styles = StyleSheet.create({
   profileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
     padding: 2,
   },
-  accentBar: {
-    height: 3,
-    backgroundColor: colors.rust,
+  avatarRing: {
+    padding: 2,
+    borderRadius: 999,
+    backgroundColor: `${colors.rust}1f`,
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.green,
+    borderWidth: 1.5,
+    borderColor: colors.white,
+  },
+  profileTextWrap: {
+    display: Platform.OS === 'web' ? 'flex' : 'none',
+  },
+  profileBtnName: {
+    fontSize: 12.5,
+    fontFamily: fonts.sansSemiBold,
+    color: colors.ink,
+    maxWidth: 110,
+  },
+  profileBtnSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 1,
+  },
+  profileBtnSub: {
+    fontSize: 11,
+    fontFamily: fonts.sansRegular,
+    color: colors.inkSoft,
   },
   backdrop: {
     flex: 1,
