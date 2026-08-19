@@ -18,7 +18,7 @@ export default function DashboardHero({ name, searchValue, onSearchChange }: Das
     <View style={styles.wrap}>
       <Text style={styles.greeting}>{greeting}, {name} 👋</Text>
       <Text style={styles.subtitle}>
-        Welcome to Emami Hub — your single place to reach every application you use.
+        Welcome to Emami Apps — your single place to reach every application you use.
       </Text>
 
       <View style={styles.askCard}>

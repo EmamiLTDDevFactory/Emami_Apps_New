@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
   Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { CheckCircle2, LayoutDashboard, Users, Briefcase, BarChart3, Bell, BadgeCheck } from 'lucide-react-native';
+import { CheckCircle2, BadgeCheck } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -39,61 +39,24 @@ const msStyles = StyleSheet.create({
   },
 });
 
-const FEATURES = [
-  { label: 'Dashboard', icon: LayoutDashboard, color: '#2563EB' },
-  { label: 'People', icon: Users, color: '#7C3AED' },
-  { label: 'Workflows', icon: Briefcase, color: '#16A34A' },
-  { label: 'Analytics', icon: BarChart3, color: '#F59E0B' },
-  { label: 'Notifications', icon: Bell, color: '#DB2777' },
-];
-
-function FeatureDiamond({ label, icon: Icon, color }: (typeof FEATURES)[number]) {
-  return (
-    <View style={diamondStyles.wrap}>
-      <View style={[diamondStyles.diamond, { backgroundColor: color }]}>
-        <View style={diamondStyles.iconWrap}>
-          <Icon size={16} color={colors.white} strokeWidth={2.3} />
-        </View>
-      </View>
-      <Text style={diamondStyles.label}>{label}</Text>
-    </View>
-  );
-}
-
-const diamondStyles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-    width: 64,
-  },
-  diamond: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    transform: [{ rotate: '45deg' }],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: colors.plumDeep,
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  iconWrap: {
-    transform: [{ rotate: '-45deg' }],
-  },
-  label: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 9.5,
-    letterSpacing: 0.3,
-    color: colors.inkSoft,
-    textAlign: 'center',
-  },
-});
-
-const APPS_GRADIENT = ['#2563EB', '#16A34A', '#F59E0B', '#DB2777'] as const;
+const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as const;
 
 function AppsWordmark() {
+  // react-native-web doesn't actually mask with @react-native-masked-view —
+  // it silently falls back to rendering the opaque mask text, which is why
+  // this showed up solid black on web. Use the CSS gradient-text trick there
+  // instead; MaskedView works correctly on native (iOS/Android).
+  if (Platform.OS === 'web') {
+    const webGradientStyle: any = {
+      backgroundImage: `linear-gradient(90deg, ${APPS_GRADIENT.join(', ')})`,
+      backgroundClip: 'text',
+      WebkitBackgroundClip: 'text',
+      color: 'transparent',
+      WebkitTextFillColor: 'transparent',
+    };
+    return <Text style={[styles.appsText, webGradientStyle]}>APPS</Text>;
+  }
+
   return (
     <MaskedView maskElement={<Text style={styles.appsText}>APPS</Text>}>
       <LinearGradient
@@ -135,17 +98,18 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             <View style={styles.logoHalo} pointerEvents="none">
               <View style={[styles.haloRing, styles.haloRingOuter]} />
               <View style={[styles.haloRing, styles.haloRingInner]} />
+              <View style={[styles.haloDot, styles.haloDotBlue]} />
+              <View style={[styles.haloDot, styles.haloDotPink]} />
             </View>
-            <EmpAppMark size={68} />
+            <View style={styles.logoTile}>
+              <EmpAppMark size={56} />
+            </View>
 
             <AppsWordmark />
-            <Text style={styles.tagline}>ONE ACCESS. ENDLESS POSSIBILITIES.</Text>
-
-            <View style={styles.featureRow}>
-              {FEATURES.map((f) => (
-                <FeatureDiamond key={f.label} {...f} />
-              ))}
-            </View>
+            <Text style={styles.tagline}>
+              <Text style={styles.taglinePrimary}>ONE ACCESS. </Text>
+              <Text style={styles.taglineAccent}>ENDLESS POSSIBILITIES.</Text>
+            </Text>
 
             <View style={styles.badgePill}>
               <BadgeCheck size={13} color={colors.white} />
@@ -189,29 +153,29 @@ const styles = StyleSheet.create({
   blob: {
     position: 'absolute',
     borderRadius: 999,
-    opacity: 0.45,
+    opacity: 0.22,
   },
   blobTop: {
-    width: 380,
-    height: 380,
-    backgroundColor: '#C7BEF5',
-    top: -160,
-    right: -120,
+    width: 420,
+    height: 420,
+    backgroundColor: '#F7B9A0',
+    top: -200,
+    right: -160,
   },
   blobBottom: {
-    width: 320,
-    height: 320,
-    backgroundColor: '#F5C9E0',
-    bottom: -140,
-    left: -100,
+    width: 360,
+    height: 360,
+    backgroundColor: '#A9C9F5',
+    bottom: -160,
+    left: -130,
   },
   blobMid: {
-    width: 260,
-    height: 260,
-    backgroundColor: '#BEE7E0',
-    top: 120,
-    left: -110,
-    opacity: 0.35,
+    width: 300,
+    height: 300,
+    backgroundColor: '#F5C9E0',
+    top: 100,
+    left: -130,
+    opacity: 0.16,
   },
   scroll: {
     flexGrow: 1,
@@ -226,46 +190,75 @@ const styles = StyleSheet.create({
   },
   logoHalo: {
     position: 'absolute',
-    top: -56,
-    width: 180,
-    height: 180,
+    top: -50,
+    width: 190,
+    height: 190,
     alignItems: 'center',
     justifyContent: 'center',
   },
   haloRing: {
     position: 'absolute',
     borderRadius: 999,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   haloRingOuter: {
-    width: 180,
-    height: 180,
-    borderColor: 'rgba(91,79,224,0.18)',
+    width: 190,
+    height: 190,
+    borderColor: 'rgba(31,27,51,0.12)',
   },
   haloRingInner: {
-    width: 132,
-    height: 132,
-    borderColor: 'rgba(219,39,119,0.18)',
+    width: 142,
+    height: 142,
+    borderColor: 'rgba(31,27,51,0.1)',
+  },
+  haloDot: {
+    position: 'absolute',
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  haloDotBlue: {
+    backgroundColor: '#2563EB',
+    top: 24,
+    left: 18,
+  },
+  haloDotPink: {
+    backgroundColor: '#DB2777',
+    top: 24,
+    right: 18,
+  },
+  logoTile: {
+    width: 96,
+    height: 96,
+    borderRadius: radii.xxl,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.plumDeep,
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   appsText: {
     fontFamily: fonts.sansBold,
     fontSize: 46,
-    letterSpacing: 1,
+    letterSpacing: 0,
     color: '#000',
   },
   tagline: {
-    fontFamily: fonts.sansBold,
     fontSize: 11,
-    letterSpacing: 1.6,
-    color: colors.ink,
-    marginTop: 6,
+    letterSpacing: 1.4,
+    marginTop: 8,
     textAlign: 'center',
   },
-  featureRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 30,
+  taglinePrimary: {
+    fontFamily: fonts.sansBold,
+    color: colors.ink,
+  },
+  taglineAccent: {
+    fontFamily: fonts.sansBold,
+    color: '#0D9488',
   },
   badgePill: {
     flexDirection: 'row',
@@ -275,7 +268,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     paddingHorizontal: 16,
     paddingVertical: 9,
-    marginTop: 24,
+    marginTop: 20,
   },
   badgeText: {
     fontFamily: fonts.sansBold,

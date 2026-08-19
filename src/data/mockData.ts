@@ -78,8 +78,8 @@ export const NAV: NavItem[] = [
 ];
 
 export const CURRENT_USER = {
-  name: 'Riya Sen',
-  email: 'r.sen@emamigroup.com',
+  name: 'Sudipto Roy',
+  email: 'sudiptoroy@emamigroup.com',
   mobile: '98300 11234',
   role: 'Employee',
   status: 'Active',

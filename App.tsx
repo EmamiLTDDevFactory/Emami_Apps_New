@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -42,6 +43,22 @@ export default function App() {
       setInitialLoggedIn(loggedIn);
       setAuthChecked(true);
     });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // When the browser restores this page from bfcache (e.g. hitting Back
+    // after a full-page navigation into an embedded app), it can resurrect
+    // an old in-memory copy of this bundle instead of the current one.
+    // Force a real reload so the page that's showing always matches what's
+    // actually deployed.
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
   const ready = fontsLoaded && authChecked;

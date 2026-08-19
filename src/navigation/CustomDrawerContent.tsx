@@ -30,7 +30,7 @@ export default function CustomDrawerContent({ state, navigation }: DrawerContent
     <View style={[styles.wrap, { paddingTop: insets.top + 16 }]}>
       <View style={styles.brandRow}>
         <EmpAppMark size={34} />
-        <Text style={styles.brandText}>EMAMI HUB</Text>
+        <Text style={styles.brandText}>EMAMI APPS</Text>
       </View>
 
       {favoriteApps.length > 0 && (
