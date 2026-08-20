@@ -44,7 +44,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "deploy:lambdas": "node scripts/deploy-lambdas.js",
-    "build:web": "expo export --platform web --clear",
+    "build:web": "expo export --platform web --clear && node scripts/inject-seo-tags.js",
     "build:embedded": "node scripts/build-embedded-apps.js",
     "serve": "node server/index.js"
   }

@@ -1,54 +1,26 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const { injectSeoTags } = require('../scripts/seo-html');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, '..', 'dist');
-const SITE_URL = process.env.SITE_URL || 'https://www.emamiapps.in';
 
-// SEO: Expo's web export has no editable HTML template, so the hub's
-// index.html ships as a bare SPA shell with no <title>/description of its
-// own — nothing for Google or link-unfurlers (Slack/Teams, which don't run
-// JS) to read. Injected into the raw HTML once at startup, rather than only
-// via client-side JS, so every crawler sees it, not just JS-executing ones.
-const SEO_DESCRIPTION =
-  "Emami Apps is the single sign-on portal for Emami Group's internal business applications — including Non CTC Expense, RC Portal, Dispatch Tracker, and MoldHealthCheck. Sign in with your Emami Microsoft work account.";
-const SEO_HEAD_TAGS = `
-    <meta name="description" content="${SEO_DESCRIPTION}">
-    <link rel="canonical" href="${SITE_URL}/">
-    <meta property="og:title" content="Emami Apps – Emami Group Employee Portal">
-    <meta property="og:description" content="Single sign-on portal for Emami Group's internal business applications.">
-    <meta property="og:url" content="${SITE_URL}/">
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="Emami Apps">
-    <script type="application/ld+json">${JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'WebApplication',
-      name: 'Emami Apps',
-      url: SITE_URL,
-      applicationCategory: 'BusinessApplication',
-      operatingSystem: 'Web',
-      description: SEO_DESCRIPTION,
-      publisher: { '@type': 'Organization', name: 'Emami Group', url: 'https://www.emamigroup.com' },
-    })}</script>
-`;
-
-function buildIndexHtmlWithSeoTags() {
-  const raw = fs.readFileSync(path.join(DIST_DIR, 'index.html'), 'utf-8');
-  const withTitle = raw.includes('<title>')
-    ? raw.replace(/<title>[^<]*<\/title>/, '<title>Emami Apps – Emami Group Employee Portal</title>')
-    : raw.replace('</head>', '  <title>Emami Apps – Emami Group Employee Portal</title>\n  </head>');
-  return withTitle.replace('</head>', `${SEO_HEAD_TAGS}  </head>`);
-}
-
+// `npm run build:web` already bakes these tags into dist/index.html on disk
+// (scripts/inject-seo-tags.js) — that's what makes them show up under any
+// static host too, not just here. This is a redundant safety net for
+// whoever/whatever actually runs this server: injectSeoTags() is idempotent,
+// so re-running it on an already-patched file is a no-op, not a duplicate.
 // Built once at startup, not per-request — index.html doesn't change while
 // the server is running. Falls back to the plain file if dist/ isn't built
 // yet (e.g. server started before `npm run build:web`).
 let indexHtmlWithSeoTags = null;
 try {
-  indexHtmlWithSeoTags = buildIndexHtmlWithSeoTags();
-} catch {}
+  indexHtmlWithSeoTags = injectSeoTags(fs.readFileSync(path.join(DIST_DIR, 'index.html'), 'utf-8'));
+} catch (err) {
+  console.error('Could not read/patch dist/index.html at startup — serving the raw file instead:', err.message);
+}
 
 function sendIndexHtml(res) {
   if (indexHtmlWithSeoTags) {
