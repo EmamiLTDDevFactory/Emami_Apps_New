@@ -20,11 +20,11 @@ export const colors = {
   // cream2/plum above, which stay reserved for the Login screen's look —
   // changing these never touches Login.
   appBg: '#EEF0F4', // cool neutral page background, not lavender-tinted
-  sidebar: '#14121F', // flat solid sidebar surface — no gradient
-  sidebarBorder: '#2A2740',
-  sidebarText: '#F2F0FA',
-  sidebarTextSoft: '#9C97B8',
-  sidebarActive: 'rgba(255,255,255,0.12)', // flat active-item highlight
+  sidebar: '#FFFFFF', // white sidebar — flat, no gradient
+  sidebarBorder: '#E6E3F5',
+  sidebarText: '#1F1B33', // dark ink — readable on white
+  sidebarTextSoft: '#6B7280',
+  sidebarActive: '#4F3FD614', // light brand-accent tint for the active row
 } as const;
 
 // The one signature accent gradient — used sparingly on primary actions and

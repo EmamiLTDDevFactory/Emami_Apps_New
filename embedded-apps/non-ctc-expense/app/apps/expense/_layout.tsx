@@ -49,6 +49,16 @@ function RootLayoutNav() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar style="light" />
+        <TouchableOpacity
+          style={styles.backToHubBar}
+          onPress={() => {
+            if (typeof window !== 'undefined') {
+              window.location.href = '/';
+            }
+          }}
+        >
+          <Text style={styles.backToHubText}>{'←'} Back to Emami Apps</Text>
+        </TouchableOpacity>
         {isAuthenticated && currentUser ? (
           <View style={styles.userBar}>
             <View style={styles.userBarLeft}>
@@ -111,6 +121,16 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F1F5F9',
+  },
+  backToHubBar: {
+    backgroundColor: '#002E5D',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  backToHubText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   userBar: {
     backgroundColor: '#FFFFFF',

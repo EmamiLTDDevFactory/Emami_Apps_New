@@ -61,7 +61,7 @@ export default function CustomDrawerContent({ state, navigation }: DrawerContent
               <View style={[styles.navIconBox, active && styles.navIconBoxActive]}>
                 <Icon size={15} color={active ? colors.white : colors.sidebarTextSoft} strokeWidth={2.2} />
               </View>
-              <Text style={[styles.navLabel, { color: active ? colors.white : colors.sidebarTextSoft, fontFamily: active ? fonts.sansBold : fonts.sansMedium }]}>
+              <Text style={[styles.navLabel, { color: active ? colors.rust : colors.sidebarTextSoft, fontFamily: active ? fonts.sansBold : fonts.sansMedium }]}>
                 {item.label}
               </Text>
             </Pressable>
