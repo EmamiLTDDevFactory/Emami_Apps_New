@@ -7,6 +7,7 @@ frontend:
     build:
       commands:
         - echo "EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL" > embedded-apps/non-ctc-expense/.env
+        - echo "VITE_API_BASE_URL=$VITE_API_BASE_URL" > embedded-apps/rc-portal/.env
         - npm run build:web
         - npm run build:embedded
   artifacts:
