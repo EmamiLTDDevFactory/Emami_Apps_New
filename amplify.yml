@@ -6,7 +6,6 @@ frontend:
         - npm ci
     build:
       commands:
-        - npm run deploy:lambdas
         - npm run build:web
         - npm run build:embedded
   artifacts:
