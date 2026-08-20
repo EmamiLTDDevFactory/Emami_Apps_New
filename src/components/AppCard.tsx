@@ -71,7 +71,11 @@ export default function AppCard({ app, isFavorite, isTopUsed, onPress, onToggleF
       {...webHoverProps}
       style={[styles.card, { shadowColor: accent, shadowOpacity, transform: [{ scale }] }, focused && focusRingWeb]}
       android_ripple={{ color: `${accent}14` }}
-      accessibilityRole="button"
+      // "link" (not "button") — react-native-web renders accessibilityRole="button"
+      // as a literal <button>, and this card wraps another real <button> (the
+      // favorite-star toggle below); nesting <button> inside <button> is invalid
+      // HTML and was throwing a hydration/nesting error on every app card.
+      accessibilityRole="link"
       accessibilityLabel={`Open ${app.name}`}
     >
       <View style={styles.headerRow}>
