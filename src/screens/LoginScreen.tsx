@@ -7,7 +7,6 @@ import { CheckCircle2, BadgeCheck } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
-import Svg, { Path, Circle } from 'react-native-svg';
 import { colors, fonts, radii } from '../theme/tokens';
 import EmpAppMark from '../components/EmpAppMark';
 
@@ -46,17 +45,14 @@ const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as
 // breaks from the brand palette here (same as APPS_GRADIENT above), so
 // these stay local rather than being promoted into theme/tokens.ts.
 const LOGIN_ACCENTS = {
+  blobTop: '#F7B9A0',
+  blobBottom: '#A9C9F5',
+  blobMid: '#F5C9E0',
   haloRingOuter: 'rgba(31,27,51,0.12)',
   haloRingInner: 'rgba(31,27,51,0.1)',
   haloDotBlue: '#2563EB',
   haloDotPink: '#DB2777',
   taglineAccent: '#0D9488',
-  lineRust: '#DB2777',
-  lineTeal: '#0D9488',
-  lineBlue: '#2563EB',
-  lineAmber: '#F59E0B',
-  nodeTeal: '#0D9488',
-  nodeOrange: '#F59E0B',
 } as const;
 
 // One-off hero-card radius (bigger than any step in the shared `radii`
@@ -107,21 +103,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.bgDecoration} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="none">
-          <Path d="M-20,120 C 80,90 140,150 220,110 S 380,60 440,100" stroke={LOGIN_ACCENTS.lineRust} strokeWidth={1.2} fill="none" opacity={0.28} />
-          <Path d="M-20,205 C 60,175 140,235 240,185 S 360,145 440,195" stroke={LOGIN_ACCENTS.lineTeal} strokeWidth={1.2} fill="none" opacity={0.24} />
-          <Path d="M-20,290 C 70,320 150,265 250,305 S 370,340 440,300" stroke={LOGIN_ACCENTS.lineBlue} strokeWidth={1} fill="none" opacity={0.16} />
-          <Path d="M-20,615 C 90,645 150,585 250,625 S 370,675 440,635" stroke={LOGIN_ACCENTS.lineBlue} strokeWidth={1.2} fill="none" opacity={0.22} />
-          <Path d="M-20,700 C 100,670 160,730 260,690 S 380,650 440,700" stroke={LOGIN_ACCENTS.lineAmber} strokeWidth={1.2} fill="none" opacity={0.2} />
-          <Circle cx={46} cy={92} r={4} fill={LOGIN_ACCENTS.nodeTeal} opacity={0.75} />
-          <Circle cx={46} cy={92} r={11} stroke={LOGIN_ACCENTS.nodeTeal} strokeWidth={1} fill="none" opacity={0.3} />
-          <Circle cx={358} cy={128} r={4} fill={LOGIN_ACCENTS.nodeOrange} opacity={0.75} />
-          <Circle cx={358} cy={128} r={11} stroke={LOGIN_ACCENTS.nodeOrange} strokeWidth={1} fill="none" opacity={0.3} />
-          <Circle cx={30} cy={660} r={3} fill={LOGIN_ACCENTS.lineRust} opacity={0.5} />
-          <Circle cx={370} cy={710} r={3} fill={LOGIN_ACCENTS.lineTeal} opacity={0.5} />
-        </Svg>
-      </View>
+      <View style={[styles.blob, styles.blobTop]} pointerEvents="none" />
+      <View style={[styles.blob, styles.blobBottom]} pointerEvents="none" />
+      <View style={[styles.blob, styles.blobMid]} pointerEvents="none" />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
@@ -184,12 +168,32 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   flex: { flex: 1 },
-  bgDecoration: {
+  blob: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    borderRadius: 999,
+    opacity: 0.22,
+  },
+  blobTop: {
+    width: 420,
+    height: 420,
+    backgroundColor: LOGIN_ACCENTS.blobTop,
+    top: -200,
+    right: -160,
+  },
+  blobBottom: {
+    width: 360,
+    height: 360,
+    backgroundColor: LOGIN_ACCENTS.blobBottom,
+    bottom: -160,
+    left: -130,
+  },
+  blobMid: {
+    width: 300,
+    height: 300,
+    backgroundColor: LOGIN_ACCENTS.blobMid,
+    top: 100,
+    left: -130,
+    opacity: 0.16,
   },
   scroll: {
     flexGrow: 1,
