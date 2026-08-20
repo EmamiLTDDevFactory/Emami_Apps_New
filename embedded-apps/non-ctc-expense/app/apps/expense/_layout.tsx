@@ -20,7 +20,7 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === 'apps' && segments[1] === 'expense' && segments[2] === 'login';
 
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/apps/expense/login');
+      router.push('/apps/expense/login');
     } else if (isAuthenticated && inAuthGroup) {
       router.push('/apps/expense/(tabs)');
     }
