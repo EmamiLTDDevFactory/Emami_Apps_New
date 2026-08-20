@@ -8,12 +8,12 @@ import { scale, verticalScale } from "@/utils/styling";
  * older imports keep working while screens migrate to the new tokens below.
  */
 export const colors = {
-  // ---- Brand (warm Swiggy orange) ----
-  brand: "#FF5A1F",
-  brandDark: "#FB3E2E",
-  brandLight: "#FF8A2B",
-  brandSoft: "#FFF1E9",
-  brandSoft2: "#FFE2D2",
+  // ---- Brand (flat indigo/violet — "Analytics Hub" style) ----
+  brand: "#4F46E5",
+  brandDark: "#4338CA",
+  brandLight: "#6366F1",
+  brandSoft: "#EEF2FF",
+  brandSoft2: "#E0E7FF",
   onBrand: "#FFFFFF",
 
   // ---- Text / ink ----
@@ -41,9 +41,9 @@ export const colors = {
   infoSoft: "#E8F1FF",
 
   // ---- Legacy (kept for backward compatibility) ----
-  primary: "#FF5A1F",
-  primaryLight: "#FF8A2B",
-  primaryDark: "#FB3E2E",
+  primary: "#4F46E5",
+  primaryLight: "#6366F1",
+  primaryDark: "#4338CA",
   text: "#fff",
   textLight: "#e5e5e5",
   textLighter: "#d4d4d4",
@@ -66,7 +66,7 @@ export const colors = {
 
 /** Brand gradient stops, reused across CTAs, hero cards and the splash. */
 export const gradients = {
-  brand: ["#FF8A2B", "#FB3E2E"] as const,
+  brand: ["#6366F1", "#4F46E5"] as const,
   brandSoft: ["#FFF1E9", "#FFE2D2"] as const,
   sunset: ["#FF9F1C", "#FB3E2E"] as const,
   ink: ["#2A2A35", "#15151C"] as const,
@@ -259,3 +259,15 @@ export const chartPalette = [
   "#14B8A6",
   "#F43F5E",
 ];
+
+/**
+ * Semantic status/severity badge tokens — consolidates the {bg, border, fg}
+ * hex triples that were duplicated verbatim across ReportDetailsModal,
+ * admindashboard's report cards, and StatusPill.
+ */
+export const statusColors = {
+  success: { bg: "#DCFCE7", border: "#4ADE80", fg: "#16A34A" },
+  warning: { bg: "#FEF9C3", border: "#FACC15", fg: "#CA8A04" },
+  danger: { bg: "#FEE2E2", border: "#F87171", fg: "#DC2626" },
+  info: { bg: "#DBEAFE", border: "#60A5FA", fg: "#2563EB" },
+};

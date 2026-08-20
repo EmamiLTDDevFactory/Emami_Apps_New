@@ -35,7 +35,7 @@ import { colors, font, gradients, radius, shadow } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/config";
 import { MouldRecord, progressOf, useInspection } from "@/lib/inspectionStore";
-import { useBreakpoint } from "@/utils/responsive";
+import { useBreakpoint, SIDEBAR_WIDTH } from "@/utils/responsive";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -223,6 +223,7 @@ function VendorDashboard() {
   const { records, startInspection, getRecord } = useInspection();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isTabletUp } = useBreakpoint();
 
   const [vendor, setVendor] = useState<VendorType | null>(null);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
@@ -303,7 +304,8 @@ function VendorDashboard() {
       if (s === "done") done++;
       else if (s === "in_progress") inProgress++;
     }
-    return { done, inProgress, total: materials.length };
+    const total = materials.length;
+    return { done, inProgress, notStarted: total - done - inProgress, total };
   }, [materials, records]);
 
   const filtered = useMemo(() => {
@@ -324,7 +326,7 @@ function VendorDashboard() {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
+      <View style={[styles.loader, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
         <ActivityIndicator size="large" color={colors.brand} />
         <Text style={styles.loaderText}>Loading your moulds…</Text>
       </View>
@@ -332,37 +334,38 @@ function VendorDashboard() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDashboard(); }} tintColor={colors.brand} colors={[colors.brand]} />}
       >
-        <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: insets.top + 14 }]}>
-          <View style={styles.heroBlob} />
+        <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
           <View style={styles.heroTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.greeting}>{greeting()} 👋</Text>
               <Text style={styles.vendorName} numberOfLines={1}>{vendor?.vendorName || "Vendor"}</Text>
               {!!vendor?.vendorCode && (
                 <View style={styles.vendorCodeChip}>
-                  <Icons.Factory size={12} color="#fff" weight="fill" />
+                  <Icons.Factory size={12} color={colors.brand} weight="fill" />
                   <Text style={styles.vendorCodeText}>Vendor {vendor.vendorCode}</Text>
                 </View>
               )}
             </View>
             <TouchableOpacity onPress={() => { handleLogout(); router.replace("/apps/mouldhealthcheck/(auth)/login"); }} style={styles.avatar}>
-              <Icons.SignOut size={24} color="#fff" weight="fill" />
+              <Icons.SignOut size={24} color={colors.textBody} weight="fill" />
             </TouchableOpacity>
           </View>
 
-          <GlassSurface intensity="chip" tint="dark" borderRadius={radius._20} style={styles.heroStats as any}>
+          <View style={styles.heroStats}>
             <HeroStat value={counts.total} label="Total moulds" />
+            <View style={styles.heroDivider} />
+            <HeroStat value={counts.notStarted} label="Not started" />
             <View style={styles.heroDivider} />
             <HeroStat value={counts.inProgress} label="In progress" />
             <View style={styles.heroDivider} />
             <HeroStat value={counts.done} label="Inspected" />
-          </GlassSurface>
+          </View>
 
           <View style={styles.searchBar}>
             <Icons.MagnifyingGlass size={20} color={colors.textMuted} weight="bold" />
@@ -373,7 +376,7 @@ function VendorDashboard() {
               </TouchableOpacity>
             )}
           </View>
-        </LinearGradient>
+        </View>
 
         <Animated.ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
           {STATUS_FILTERS.map((f) => (
@@ -408,7 +411,7 @@ function AdminDashboard() {
   const { user, logout: handleLogout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isPhone } = useBreakpoint();
+  const { isPhone, isTabletUp } = useBreakpoint();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -452,20 +455,61 @@ function AdminDashboard() {
 
       const results = data?.d?.results || [];
       console.log("Results: ", results);
-      const processedReports = results.map((r: any) => ({
-        ...r,
-        LIFNR: r.Lifnr,
-        MATNR: r.Matnr,
-        MAKTX: r.Name1,
-        SUBDATE: r.ZsubDate,
-        COMPLETED_FLAG: r.CompletedFlag,
-        DRAFT_FLAG: r.DraftFlag,
-        CREATED_BY: r.CreatedBy,
-        CREATED_ON: r.CreatedOn,
-        AdminRevFlag: r.AdminRevFlag,
-        AdminApprvFlag: r.AdminApprvFlag,
-        Criticality: r.Zcriticality || "Ok",
-        parsedDate: formatSAPDate(r.ZsubDate)
+
+      const SECTION_TITLES: Record<string, string> = {
+        VB: "Visual & Basic Condition",
+        MA: "Mould Base & Alignment",
+        CC: "Cavity & Core Condition",
+        CS: "Cooling System",
+        ES: "Ejection System",
+        MC: "Mechanism Check",
+        HC: "Hydraulic Core / Slides",
+        FC: "Collapsible Core",
+        NI: "Component Quality Details",
+      };
+
+      const processedReports = await Promise.all(results.map(async (r: any) => {
+        let okCount = 0;
+        let issueCount = 0;
+        try {
+          const detRes = await api.get("/ZMM_MOULD_CARE_SRV/ZMouldGetDataSet", {
+            params: {
+              $filter: `Matnr eq '${r.Matnr}' and Lifnr eq '${r.Lifnr}' and Zaction eq 'X'`,
+              $format: "json",
+            },
+          });
+          const detItems = detRes.data?.d?.results || [];
+          detItems.forEach((item: any) => {
+            const colId = item.ZmouldColId;
+            if (SECTION_TITLES[colId]) {
+              const val1 = item.ZmouldColVal1?.trim();
+              if (val1 === "Yes" || val1 === "Condition OK") okCount++;
+              else if (val1 === "No" || val1 === "Issue Detected") issueCount++;
+              else if (val1 === "Action Initiated" || val1 === "Action Taken") { /* ignore */ }
+              else okCount++;
+            }
+          });
+        } catch (e) {
+          console.warn("Failed to fetch details for", r.Matnr);
+        }
+
+        return {
+          ...r,
+          LIFNR: r.Lifnr,
+          MATNR: r.Matnr,
+          MAKTX: r.Name1,
+          SUBDATE: r.ZsubDate,
+          COMPLETED_FLAG: r.CompletedFlag,
+          DRAFT_FLAG: r.DraftFlag,
+          CREATED_BY: r.CreatedBy,
+          CREATED_ON: r.CreatedOn,
+          AdminRevFlag: r.AdminRevFlag,
+          AdminApprvFlag: r.AdminApprvFlag,
+          Criticality: r.Zcriticality || "Ok",
+          parsedDate: formatSAPDate(r.ZsubDate),
+          ZokCount: okCount,
+          ZissueCount: issueCount,
+        };
       }));
 
       setReports(processedReports);
@@ -511,8 +555,8 @@ function AdminDashboard() {
 
   const conditionDonutData = useMemo(() => {
     // Same 18/3 per-report fallback used by the existing badge text (line ~703/706 above).
-    const ok = reports.reduce((sum, r) => sum + (Number(r.ZokCount) || 18), 0);
-    const issues = reports.reduce((sum, r) => sum + (Number(r.ZissueCount) || 3), 0);
+    const ok = reports.reduce((sum, r) => sum + (r.ZokCount !== undefined ? Number(r.ZokCount) : 18), 0);
+    const issues = reports.reduce((sum, r) => sum + (r.ZissueCount !== undefined ? Number(r.ZissueCount) : 3), 0);
     return [
       { label: "Conditions OK", value: ok, color: colors.success },
       { label: "Issues Detected", value: issues, color: colors.danger },
@@ -558,9 +602,11 @@ function AdminDashboard() {
 
     try {
       const payload = {
+
         Lifnr: reportToApprove.LIFNR,
         Matnr: reportToApprove.MATNR,
         ZsubDate: reportToApprove.SUBDATE,
+        ZinspId: reportToApprove.ZinspId,
         Zstat: "R",
         Zdate: `\/Date(${new Date().getTime()})\/`,
         Ztime: "PT00H00M00S",
@@ -599,7 +645,7 @@ function AdminDashboard() {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
+      <View style={[styles.loader, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
         <ActivityIndicator size="large" color={colors.brand} />
         <Text style={styles.loaderText}>Loading global reports…</Text>
       </View>
@@ -607,32 +653,31 @@ function AdminDashboard() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadReports(); }} tintColor={colors.brand} />}
       >
-        <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: insets.top + 14 }]}>
-          <View style={styles.heroBlob} />
+        <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
           <View style={styles.heroTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.greeting}>{greeting()} Admin 👋</Text>
               <Text style={styles.vendorName}>Global Overview</Text>
             </View>
             <TouchableOpacity onPress={() => { handleLogout(); router.replace("/apps/mouldhealthcheck/(auth)/login"); }} style={styles.avatar}>
-              <Icons.SignOut size={24} color="#fff" weight="fill" />
+              <Icons.SignOut size={24} color={colors.textBody} weight="fill" />
             </TouchableOpacity>
           </View>
 
-          <GlassSurface intensity="chip" tint="dark" borderRadius={radius._20} style={styles.heroStats as any}>
+          <View style={styles.heroStats}>
             <HeroStat value={reports.length} label="Total Reports" />
             <View style={styles.heroDivider} />
             <HeroStat value={reports.filter(r => r.COMPLETED_FLAG === 'X').length} label="Inspection Completed" />
             <View style={styles.heroDivider} />
             <HeroStat value={reports.filter(r => r.DRAFT_FLAG === 'X').length} label="Drafts" />
-          </GlassSurface>
-        </LinearGradient>
+          </View>
+        </View>
 
         <View style={{ marginTop: 24, paddingHorizontal: 20 }}>
           <SectionTitle title="Criticality Overview" subtitle="Network asset health" />
@@ -642,16 +687,16 @@ function AdminDashboard() {
             contentContainerStyle={{ gap: 16, paddingBottom: 16, paddingRight: 20 }}
           >
             <View style={{ width: 160 }}>
-              <StatTile value={reports.filter(r => r.Criticality === "Critical").length} label="Critical" icon={<Icons.Warning size={24} color="white" weight="bold" />} tint={colors.danger} />
+              <StatTile value={reports.filter(r => r.Criticality === "Critical").length} label="Critical" subtitle="Needs immediate action" icon={<Icons.Warning size={20} color={colors.danger} weight="duotone" />} tint={colors.danger} tintBg={colors.dangerSoft} />
             </View>
             <View style={{ width: 160 }}>
-              <StatTile value={reports.filter(r => r.Criticality === "Major").length} label="Major" icon={<Icons.WarningCircle size={24} color="white" weight="bold" />} tint={colors.warning} />
+              <StatTile value={reports.filter(r => r.Criticality === "Major").length} label="Major" subtitle="Schedule action soon" icon={<Icons.WarningCircle size={20} color={colors.warning} weight="duotone" />} tint={colors.warning} tintBg={colors.warningSoft} />
             </View>
             <View style={{ width: 160 }}>
-              <StatTile value={reports.filter(r => r.Criticality === "Minor").length} label="Minor" icon={<Icons.Info size={24} color="white" weight="bold" />} tint={colors.info} />
+              <StatTile value={reports.filter(r => r.Criticality === "Minor").length} label="Minor" subtitle="Low-priority findings" icon={<Icons.Info size={20} color={colors.info} weight="duotone" />} tint={colors.info} tintBg={colors.infoSoft} />
             </View>
             <View style={{ width: 160 }}>
-              <StatTile value={reports.filter(r => r.Criticality === "Ok").length} label="Ok" icon={<Icons.Check size={24} color="white" weight="bold" />} tint={colors.success} />
+              <StatTile value={reports.filter(r => r.Criticality === "Ok").length} label="Ok" subtitle="No issues found" icon={<Icons.Check size={20} color={colors.success} weight="duotone" />} tint={colors.success} tintBg={colors.successSoft} />
             </View>
           </ScrollView>
 
@@ -738,9 +783,15 @@ function AdminDashboard() {
                   >
                     <View style={styles.adminCardHeader}>
                       <View style={{ flex: 1, marginRight: 10 }}>
-                        <Text style={styles.adminCardCode} numberOfLines={1}>{report.Matnr}</Text>
-                        <Text style={styles.adminCardDesc} numberOfLines={1}>{report.Maktx}</Text>
-
+                        <Text style={styles.adminCardCode} numberOfLines={1}>{report.Maktx || "Material Description"}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={styles.adminCardDesc} numberOfLines={1}>Code: {report.Matnr}</Text>
+                          {(report.Zinspid || report.ZinspId) ? (
+                            <View style={{ backgroundColor: '#10b981', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>Insp ID: {report.Zinspid || report.ZinspId}</Text>
+                            </View>
+                          ) : null}
+                        </View>
                         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                           <View style={[styles.adminBadge, { backgroundColor: report.Criticality === 'Critical' ? '#fee2e2' : report.Criticality === 'Major' ? '#fef9c3' : report.Criticality === 'Minor' ? '#dbeafe' : '#dcfce7', borderColor: report.Criticality === 'Critical' ? '#f87171' : report.Criticality === 'Major' ? '#facc15' : report.Criticality === 'Minor' ? '#60a5fa' : '#4ade80' }]}>
                             <Text style={[styles.adminBadgeText, { color: report.Criticality === 'Critical' ? '#dc2626' : report.Criticality === 'Major' ? '#ca8a04' : report.Criticality === 'Minor' ? '#2563eb' : '#16a34a' }]}>
@@ -748,10 +799,10 @@ function AdminDashboard() {
                             </Text>
                           </View>
                           <View style={[styles.adminBadge, { backgroundColor: '#dcfce7', borderColor: '#4ade80' }]}>
-                            <Text style={[styles.adminBadgeText, { color: '#16a34a' }]}>{report.ZokCount || 18} Condition OK</Text>
+                            <Text style={[styles.adminBadgeText, { color: '#16a34a' }]}>{report.ZokCount !== undefined ? report.ZokCount : 18} Condition OK</Text>
                           </View>
                           <View style={[styles.adminBadge, { backgroundColor: '#fee2e2', borderColor: '#f87171' }]}>
-                            <Text style={[styles.adminBadgeText, { color: '#dc2626' }]}>{report.ZissueCount || 3} Issue Detected</Text>
+                            <Text style={[styles.adminBadgeText, { color: '#dc2626' }]}>{report.ZissueCount !== undefined ? report.ZissueCount : 3} Issue Detected</Text>
                           </View>
                         </View>
                       </View>
@@ -907,7 +958,12 @@ function AdminDashboard() {
       <ReportDetailsModal
         visible={!!reportToView}
         report={reportToView ? { ...reportToView, Criticality: reportToView.Criticality } : null}
-        onClose={() => setReportToView(null)}
+        onClose={async () => {
+          setReportToView(null);
+          setRefreshing(true);
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          await loadReports(false);
+        }}
       />
     </View>
   );
@@ -921,7 +977,7 @@ export default function DashboardScreen() {
   const isAdmin = user?.Role?.toLowerCase() === "admin";
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       {isAdmin ? <AdminDashboard /> : <VendorDashboard />}
     </>
   );
@@ -945,21 +1001,22 @@ const styles = StyleSheet.create({
   hero: {
     paddingHorizontal: 20,
     paddingBottom: 22,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: "hidden",
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  heroBlob: { position: "absolute", width: 200, height: 200, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.10)", top: -80, right: -50 },
   heroTopRow: { flexDirection: "row", alignItems: "center" },
-  greeting: { color: "rgba(255,255,255,0.92)", fontSize: font.sub, fontWeight: font.semibold },
-  vendorName: { color: "#fff", fontSize: 22, fontWeight: font.black, marginTop: 2, letterSpacing: -0.4 },
-  vendorCodeChip: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 10, height: 24, borderRadius: radius.pill, marginTop: 8 },
-  vendorCodeText: { color: "#fff", fontSize: font.micro, fontWeight: font.bold },
+  greeting: { color: colors.textMuted, fontSize: font.sub, fontWeight: font.semibold },
+  vendorName: { color: colors.ink, fontSize: 22, fontWeight: font.black, marginTop: 2, letterSpacing: -0.4 },
+  vendorCodeChip: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: colors.brandSoft, paddingHorizontal: 10, height: 24, borderRadius: radius.pill, marginTop: 8 },
+  vendorCodeText: { color: colors.brand, fontSize: font.micro, fontWeight: font.bold },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -967,11 +1024,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingVertical: 14,
     marginTop: 18,
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius._20,
   },
   heroStat: { flex: 1, alignItems: "center" },
-  heroStatValue: { color: "#fff", fontSize: 20, fontWeight: font.black },
-  heroStatLabel: { color: "rgba(255,255,255,0.85)", fontSize: font.micro, fontWeight: font.semibold, marginTop: 2 },
-  heroDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.25)", marginVertical: 4 },
+  heroStatValue: { color: colors.ink, fontSize: 20, fontWeight: font.black },
+  heroStatLabel: { color: colors.textMuted, fontSize: font.micro, fontWeight: font.semibold, marginTop: 2 },
+  heroDivider: { width: 1, backgroundColor: colors.border, marginVertical: 4 },
 
   chartsRow: { flexDirection: "row", gap: 14, marginTop: 16 },
   chartsRowPhone: { flexDirection: "column" },
@@ -991,7 +1050,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius._17,
     paddingHorizontal: 14,
     height: 50,
@@ -1797,7 +1858,7 @@ const styles = StyleSheet.create({
 
 //   if (loading) {
 //     return (
-//       <View style={styles.loader}>
+//       <View style={[styles.loader, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
 //         <ActivityIndicator size="large" color={colors.brand} />
 //         <Text style={styles.loaderText}>Loading your moulds…</Text>
 //       </View>
@@ -1996,7 +2057,7 @@ const styles = StyleSheet.create({
 
 //   if (loading) {
 //     return (
-//       <View style={styles.loader}>
+//       <View style={[styles.loader, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
 //         <ActivityIndicator size="large" color={colors.brand} />
 //         <Text style={styles.loaderText}>Loading global reports…</Text>
 //       </View>

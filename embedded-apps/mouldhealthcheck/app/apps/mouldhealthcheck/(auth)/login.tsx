@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Icons from "phosphor-react-native";
@@ -8,11 +7,11 @@ import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppHeader from "@/components/ui/AppHeader";
+import Card from "@/components/ui/Card";
 import Field from "@/components/ui/Field";
-import GlassCard from "@/components/ui/GlassCard";
 import GlassSurface from "@/components/ui/GlassSurface";
 import GradientButton from "@/components/ui/GradientButton";
-import { colors, font, gradients, radius } from "@/constants/theme";
+import { colors, font, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/config";
 import { useBreakpoint } from "@/utils/responsive";
@@ -183,15 +182,10 @@ export default function Login() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
-
-      {/* Colorful gradient backdrop + soft blobs — one layout for every breakpoint. */}
-      <LinearGradient colors={gradients.candy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <View style={[styles.blob, styles.blobPink]} />
-      <View style={[styles.blob, styles.blobBlue]} />
+      <StatusBar style="dark" />
 
       <View style={{ paddingTop: insets.top, paddingHorizontal: 16 }}>
-        <AppHeader back light />
+        <AppHeader back />
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -201,7 +195,7 @@ export default function Login() {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={ZoomIn.duration(500)} style={{ width: "100%", alignItems: "center" }}>
-            <GlassCard intensity="hero" tint="dark" style={[styles.card, { width: cardWidth, maxWidth: "100%" }]}>
+            <Card style={[styles.card, { width: cardWidth, maxWidth: "100%" }]}>
               <Animated.View entering={ZoomIn.duration(500)} style={styles.logoCard}>
                 <Image source={{ uri: LOGO_BASE64 }} style={styles.logo} resizeMode="contain" />
               </Animated.View>
@@ -258,7 +252,7 @@ export default function Login() {
                       returnKeyType="go"
                     />
                     <TouchableOpacity onPress={handleSendOtp} disabled={loading} style={{ alignSelf: 'flex-end', marginTop: 12 }}>
-                      <Text style={{ color: "#fff", fontSize: font.sub, fontWeight: font.bold, opacity: loading ? 0.5 : 1 }}>
+                      <Text style={{ color: colors.brand, fontSize: font.sub, fontWeight: font.bold, opacity: loading ? 0.5 : 1 }}>
                         Resend OTP
                       </Text>
                     </TouchableOpacity>
@@ -279,7 +273,7 @@ export default function Login() {
                   }
                 />
               </Animated.View>
-            </GlassCard>
+            </Card>
 
             <Text style={styles.footerText}>© 2026 Mold Inspection Portal - Emami Limited. All rights reserved.</Text>
           </Animated.View>
@@ -292,10 +286,7 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  blob: { position: "absolute", borderRadius: 999 },
-  blobPink: { width: 320, height: 320, backgroundColor: "rgba(236,72,153,0.28)", top: "-6%", left: "-10%" },
-  blobBlue: { width: 300, height: 300, backgroundColor: "rgba(45,127,249,0.26)", bottom: "-4%", right: "-8%" },
+  root: { flex: 1, backgroundColor: colors.bg },
   scrollArea: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 22 },
   card: { padding: 32, alignItems: "center" },
   logoCard: {
@@ -307,14 +298,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logo: { width: 64, height: 64 },
-  title: { color: "#fff", fontSize: font.h3, fontWeight: font.black, marginTop: 14, textAlign: "center" },
-  subtitle: { color: "rgba(255,255,255,0.85)", fontSize: font.body, fontWeight: font.medium, marginTop: 6, textAlign: "center" },
+  title: { color: colors.ink, fontSize: font.h3, fontWeight: font.black, marginTop: 14, textAlign: "center" },
+  subtitle: { color: colors.textMuted, fontSize: font.body, fontWeight: font.medium, marginTop: 6, textAlign: "center" },
   form: { width: "100%", marginTop: 24, gap: 16 },
 
   // Tab Styles
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: colors.bg,
     borderRadius: 12,
     padding: 4,
   },
@@ -325,7 +316,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   activeTab: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -335,7 +326,7 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: font.body,
     fontWeight: font.medium,
-    color: "rgba(255,255,255,0.8)",
+    color: colors.textMuted,
   },
   activeTabText: {
     color: colors.brand,
@@ -344,7 +335,7 @@ const styles = StyleSheet.create({
 
   footerText: {
     marginTop: 24,
-    color: "rgba(255,255,255,0.65)",
+    color: colors.textFaint,
     fontSize: font.micro,
     fontWeight: font.medium,
     textAlign: "center",

@@ -1,5 +1,4 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Icons from "phosphor-react-native";
 import React, { useCallback, useMemo, useState } from "react";
@@ -14,10 +13,10 @@ import StatTile from "@/components/ui/StatTile";
 import StatusPill from "@/components/ui/StatusPill";
 import ReportDetailsModal from "@/components/ui/ReportDetailsModal";
 import { DonutChart, LineAreaChart } from "@/components/ui/charts";
-import { colors, font, gradients, radius, shadow } from "@/constants/theme";
+import { colors, font, radius, shadow } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/config";
-import { useBreakpoint, useResponsiveValue } from "@/utils/responsive";
+import { useBreakpoint, useResponsiveValue, SIDEBAR_WIDTH } from "@/utils/responsive";
 
 // --- Types ---
 type SubmissionType = {
@@ -27,8 +26,9 @@ type SubmissionType = {
   vendorCode?: string; // Added for Admin view
   submissionDate: string;
   approvedDate: string;
-  status: "Approved" | "Submitted" | "In Progress" |"L2 Approval In Progress";
+  status: "Approved" | "Submitted" | "In Progress" | "L2 Approval In Progress" | "L1 approved and L2 Approval In Progress";
   Criticality?: string; // Added for Criticality KPI
+  inspectionId?: string; // Added for UI card
   /** Chart-only: epoch ms parsed from ZsubDate, for the trend line below. Not used for display/logic. */
   _ts?: number;
 };
@@ -98,6 +98,7 @@ const DateBox = ({ icon, label, value }: { icon: React.ReactNode; label: string;
 // ============================================================================
 function VendorStatistics() {
   const { user, logout: handleLogout } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, isTabletUp } = useBreakpoint();
 
@@ -136,7 +137,7 @@ function VendorStatistics() {
         return;
       }
 
-      const { data } = await api.get("/ZmouldDataReportSet", {
+      const { data } = await api.get("/ZMM_MOULD_CARE_SRV/ZmouldDataReportSet", {
         params: {
           "$filter": `Lifnr eq '${vendorId}'`,
           "$format": "json"
@@ -192,16 +193,14 @@ function VendorStatistics() {
       }
     >
       {/* VENDOR HERO */}
-      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: insets.top + 16 }]}>
-        <View style={styles.heroBlob} />
-        
+      <View style={[styles.hero, { paddingTop: insets.top + 16 }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: 12 }}>
           <View>
             <Text style={styles.heroKicker}>VENDOR INSIGHTS</Text>
             <Text style={styles.heroTitle}>Your submission overview</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 14 }}>
-            <Icons.SignOut size={24} color="#fff" weight="bold" />
+          <TouchableOpacity onPress={() => { handleLogout(); router.replace("/apps/mouldhealthcheck/(auth)/login"); }} style={{ backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, padding: 10, borderRadius: 14 }}>
+            <Icons.SignOut size={24} color={colors.textBody} weight="bold" />
           </TouchableOpacity>
         </View>
 
@@ -213,18 +212,18 @@ function VendorStatistics() {
             <RingStat color={colors.info} label="Total Assigned" value={total} />
           </View>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* VENDOR KPI */}
       <View style={styles.kpiContainer}>
         <View style={styles.kpiTileWrapper}>
-          <StatTile value={total} label="Total" icon={<Icons.ListChecks size={20} color={colors.info} weight="duotone" />} tint={colors.info} tintBg={colors.infoSoft} />
+          <StatTile value={total} label="Total" subtitle="Moulds assigned" icon={<Icons.ListChecks size={20} color={colors.info} weight="duotone" />} tint={colors.info} tintBg={colors.infoSoft} />
         </View>
         <View style={styles.kpiTileWrapper}>
-          <StatTile value={submitted} label="Submitted" icon={<Icons.SealCheck size={20} color={colors.success} weight="duotone" />} tint={colors.success} tintBg={colors.successSoft} />
+          <StatTile value={submitted} label="Submitted" subtitle="Completed inspections" icon={<Icons.SealCheck size={20} color={colors.success} weight="duotone" />} tint={colors.success} tintBg={colors.successSoft} />
         </View>
         <View style={styles.kpiTileWrapper}>
-          <StatTile value={inProgress} label="In Progress" icon={<Icons.ClockCountdown size={20} color={colors.warning} weight="duotone" />} tint={colors.warning} tintBg={colors.warningSoft} />
+          <StatTile value={inProgress} label="In Progress" subtitle="Awaiting completion" icon={<Icons.ClockCountdown size={20} color={colors.warning} weight="duotone" />} tint={colors.warning} tintBg={colors.warningSoft} />
         </View>
       </View>
 
@@ -260,7 +259,7 @@ function VendorStatistics() {
                   <View style={styles.histTop}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.histCode}>{item.materialCode}</Text>
-                      <Text style={styles.histDesc} numberOfLines={1}>{item.materialDescription}</Text>
+                      <Text style={styles.histDesc}>{item.materialDescription}</Text>
                     </View>
                     <StatusPill kind={item.status === "Submitted" ? "Submitted" : "inprogress"} />
                   </View>
@@ -276,7 +275,16 @@ function VendorStatistics() {
           </View>
         )}
       </View>
-      <ReportDetailsModal visible={!!selectedReport} report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <ReportDetailsModal 
+        visible={!!selectedReport} 
+        report={selectedReport} 
+        onClose={async () => {
+          setSelectedReport(null);
+          setRefreshing(true);
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          await load();
+        }} 
+      />
     </Animated.ScrollView>
   );
 }
@@ -287,6 +295,7 @@ function VendorStatistics() {
 // ============================================================================
 function AdminStatistics() {
   const { user, logout: handleLogout } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, isTabletUp } = useBreakpoint();
 
@@ -304,20 +313,10 @@ function AdminStatistics() {
     : '100%';
 
   const total = submissions.length;
-  const approved = submissions.filter((s) => s.status === "Submitted").length;
-  const pending = submissions.filter((s) => s.status === "In Progress").length;
+  const approved = submissions.filter((s) => s.status === "Approved").length;
+  const pending = submissions.filter((s) => s.status === "L1 approved and L2 Approval In Progress").length;
   const rate = total ? Math.round((approved / total) * 100) : 0;
 
-  const critCritical = submissions.filter((s) => s.Criticality === "Critical").length;
-  const critMajor = submissions.filter((s) => s.Criticality === "Major").length;
-  const critMinor = submissions.filter((s) => s.Criticality === "Minor").length;
-  const critOk = submissions.filter((s) => s.Criticality === "Ok").length;
-  const criticalityDonutData = useMemo(() => ([
-    { label: "Critical", value: critCritical, color: colors.danger },
-    { label: "Major", value: critMajor, color: colors.warning },
-    { label: "Minor", value: critMinor, color: colors.info },
-    { label: "Ok", value: critOk, color: colors.success },
-  ]), [critCritical, critMajor, critMinor, critOk]);
   const trendData = useMemo(() => buildTrendSeries(submissions), [submissions]);
 
   useFocusEffect(
@@ -331,28 +330,34 @@ function AdminStatistics() {
       if (!refreshing) setLoading(true);
       const validEmail = user?.Email || user?.email;
 
-      // Fetch all reports using the Admin endpoint
-      //const { data } = await api.get("/admin/reports", { params: { Email: validEmail } });
-      const { data } = await api.get("/ZMouldLogSet", {
+      // Fetch all reports using the direct SAP OData service path
+      const { data } = await api.get("/ZMM_MOULD_CARE_SRV/ZMouldLogSet", {
         params: {
           "$filter": `ReviewedBy eq '${validEmail}' and ApprovedBy eq '${validEmail}'`,
           "$format": "json"
         }
       });
-      const results = data?.d?.results || [];
+      const results = data?.mouldreport || data?.d?.results || [];
 
       if (results.length > 0) {
-        const mappedSubmissions: SubmissionType[] = results.map((item: any) => ({
-          id: `${item.Matnr}_${item.Lifnr}_${Math.random()}`, // Ensure unique key
-          materialCode: item.Matnr,
-          vendorCode: item.Lifnr,
-          materialDescription: item.Maktx || `Material ${item.Matnr}`,
-          submissionDate: parseSAPDate(item.ZsubDate),
-          approvedDate: item.AprvStat === "X" ? parseSAPDate(item.ApprovedOn) : parseSAPDate(item.ReviewedOn) || "-",
-          status: item.AprvStat === "X" ? "Approved" : "L2 Approval In Progress", // "Submitted" acting as "Approved" in UI mapping
-          Criticality: item.Criticality || "Ok",
-          _ts: sapDateToTimestamp(item.ZsubDate),
-        }));
+        const mappedSubmissions: SubmissionType[] = results.map((item: any) => {
+          const approvedOnRaw = item.APPROVED_ON || item.ApprovedOn;
+          const isApprovedDateBlank = !approvedOnRaw || approvedOnRaw === "00000000" || approvedOnRaw.trim() === "";
+          const isReallyApproved = ((item.APRV_FLAG || item.AprvStat) === "X") && !isApprovedDateBlank;
+
+          return {
+            id: `${item.MATNR || item.Matnr}_${item.LIFNR || item.Lifnr}_${Math.random()}`, // Ensure unique key
+            materialCode: item.MATNR || item.Matnr,
+            vendorCode: item.LIFNR || item.Lifnr,
+            materialDescription: item.MAKTX || item.Maktx || `Material ${item.MATNR || item.Matnr}`,
+            submissionDate: parseSAPDate(item.SUBDATE || item.ZsubDate),
+            approvedDate: isReallyApproved ? parseSAPDate(approvedOnRaw) : parseSAPDate(item.REVIEWED_ON || item.ReviewedOn) || "-",
+            status: isReallyApproved ? "Approved" : "L1 approved and L2 Approval In Progress",
+            Criticality: item.Criticality || "Ok",
+            inspectionId: item.ZINSPID || item.Zinspid || item.ZinspId,
+            _ts: sapDateToTimestamp(item.SUBDATE || item.ZsubDate),
+          };
+        });
 
         setSubmissions(mappedSubmissions);
       } else {
@@ -384,16 +389,14 @@ function AdminStatistics() {
       }
     >
       {/* ADMIN HERO */}
-      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: insets.top + 16 }]}>
-        <View style={styles.heroBlob} />
-
+      <View style={[styles.hero, { paddingTop: insets.top + 16 }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: 12 }}>
           <View>
             <Text style={styles.heroKicker}>GLOBAL INSIGHTS</Text>
             <Text style={styles.heroTitle}>Overall Network Status</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 14 }}>
-            <Icons.SignOut size={24} color="#fff" weight="bold" />
+          <TouchableOpacity onPress={() => { handleLogout(); router.replace("/apps/mouldhealthcheck/(auth)/login"); }} style={{ backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, padding: 10, borderRadius: 14 }}>
+            <Icons.SignOut size={24} color={colors.textBody} weight="bold" />
           </TouchableOpacity>
         </View>
 
@@ -405,30 +408,22 @@ function AdminStatistics() {
             <RingStat color={colors.info} label="Total Reports" value={total} />
           </View>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* ADMIN KPI */}
       <View style={styles.kpiContainer}>
         <View style={styles.kpiTileWrapper}>
-          <StatTile value={total} label="Total" icon={<Icons.Globe size={20} color={colors.info} weight="duotone" />} tint={colors.info} tintBg={colors.infoSoft} />
+          <StatTile value={total} label="Total" subtitle="Network reports" icon={<Icons.Globe size={20} color={colors.info} weight="duotone" />} tint={colors.info} tintBg={colors.infoSoft} />
         </View>
         <View style={styles.kpiTileWrapper}>
-          <StatTile value={approved} label="Approved" icon={<Icons.CheckCircle size={20} color={colors.success} weight="duotone" />} tint={colors.success} tintBg={colors.successSoft} />
+          <StatTile value={approved} label="Approved" subtitle="Fully signed off" icon={<Icons.CheckCircle size={20} color={colors.success} weight="duotone" />} tint={colors.success} tintBg={colors.successSoft} />
         </View>
         <View style={styles.kpiTileWrapper}>
-          <StatTile value={pending} label="Pending" icon={<Icons.Hourglass size={20} color={colors.warning} weight="duotone" />} tint={colors.warning} tintBg={colors.warningSoft} />
+          <StatTile value={pending} label="Pending" subtitle="Awaiting L2 review" icon={<Icons.Hourglass size={20} color={colors.warning} weight="duotone" />} tint={colors.warning} tintBg={colors.warningSoft} />
         </View>
       </View>
 
-      {/* ADMIN CRITICALITY + TREND */}
-      {total > 0 && (
-        <View style={{ marginTop: 8, paddingHorizontal: 20 }}>
-          <SectionTitle title="Criticality Split" subtitle="Across reviewed & approved reports" />
-          <View style={[styles.trendCard, shadow.card]}>
-            <DonutChart data={criticalityDonutData} size={126} strokeWidth={18} />
-          </View>
-        </View>
-      )}
+      {/* ADMIN TREND */}
       {trendData.length >= 2 && (
         <View style={{ marginTop: 24, paddingHorizontal: 20 }}>
           <SectionTitle title="Submission Trend" subtitle="Cumulative submissions over time" />
@@ -459,10 +454,17 @@ function AdminStatistics() {
                 >
                   <View style={styles.histTop}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.histCode}>{item.materialCode}</Text>
-                      <Text style={styles.histDesc} numberOfLines={1}>{item.materialDescription}</Text>
+                      <Text style={styles.histCode}>{item.materialDescription}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <Text style={styles.histDesc} numberOfLines={1}>Code: {item.materialCode}</Text>
+                        {item.inspectionId ? (
+                          <View style={{ backgroundColor: '#10b981', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>Insp ID: {item.inspectionId}</Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
-                    <StatusPill kind={item.status === "Approved" ? "Approved" : item.status === "L2 Approval In Progress" ? "L2 Approval In Progress" : "inprogress"} />
+                    <StatusPill kind={item.status === "Approved" ? "Approved" : item.status === "L1 approved and L2 Approval In Progress" ? "L1 approved and L2 Approval In Progress" : "inprogress"} />
                   </View>
 
                   <View style={styles.tileDivider} />
@@ -482,7 +484,16 @@ function AdminStatistics() {
           </View>
         )}
       </View>
-      <ReportDetailsModal visible={!!selectedReport} report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <ReportDetailsModal 
+        visible={!!selectedReport} 
+        report={selectedReport} 
+        onClose={async () => {
+          setSelectedReport(null);
+          setRefreshing(true);
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          await load();
+        }} 
+      />
     </Animated.ScrollView>
   );
 }
@@ -493,11 +504,12 @@ function AdminStatistics() {
 // ============================================================================
 export default function StatisticsScreen() {
   const { user } = useAuth();
+  const { isTabletUp } = useBreakpoint();
   const isAdmin = user?.Role === "Admin" || user?.Role === "admin" || user?.Role === "admin";
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
+    <View style={[styles.root, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
+      <StatusBar style="dark" />
       {isAdmin ? <AdminStatistics /> : <VendorStatistics />}
     </View>
   );
@@ -508,15 +520,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
 
-  hero: { paddingHorizontal: 20, paddingBottom: 22, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, overflow: "hidden" },
-  heroBlob: { position: "absolute", width: 220, height: 220, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.10)", top: -90, right: -60 },
-  heroKicker: { color: "rgba(255,255,255,0.85)", fontSize: font.micro, fontWeight: font.bold, letterSpacing: 1 },
-  heroTitle: { color: "#fff", fontSize: 22, fontWeight: font.black, marginTop: 4, letterSpacing: -0.4 },
+  hero: { paddingHorizontal: 20, paddingBottom: 22, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  heroKicker: { color: colors.textMuted, fontSize: font.micro, fontWeight: font.bold, letterSpacing: 1 },
+  heroTitle: { color: colors.ink, fontSize: 22, fontWeight: font.black, marginTop: 4, letterSpacing: -0.4 },
 
   ringCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.brandSoft,
     borderRadius: radius._24,
     padding: 18,
     marginTop: 18,

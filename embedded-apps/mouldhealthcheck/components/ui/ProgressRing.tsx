@@ -32,8 +32,8 @@ export default function ProgressRing({
       <Svg width={size} height={size}>
         <Defs>
           <LinearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#FF8A2B" />
-            <Stop offset="1" stopColor="#FB3E2E" />
+            <Stop offset="0" stopColor={colors.brandLight} />
+            <Stop offset="1" stopColor={colors.brand} />
           </LinearGradient>
         </Defs>
         <Circle

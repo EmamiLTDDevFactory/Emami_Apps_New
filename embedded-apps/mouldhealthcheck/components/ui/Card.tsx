@@ -1,12 +1,12 @@
 import React, { ReactNode } from "react";
-import { View, TouchableOpacity, StyleSheet, ViewStyle } from "react-native";
+import { View, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import * as Haptics from "expo-haptics";
 import { colors, radius, shadow } from "@/constants/theme";
 import GlassSurface, { GlassIntensity, GlassTint } from "./GlassSurface";
 
 type Props = {
   children: ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   padded?: boolean;
   flat?: boolean;

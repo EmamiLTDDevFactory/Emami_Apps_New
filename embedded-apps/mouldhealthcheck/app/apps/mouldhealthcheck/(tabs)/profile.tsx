@@ -1,5 +1,4 @@
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Icons from "phosphor-react-native";
@@ -8,11 +7,11 @@ import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import GlassSurface from "@/components/ui/GlassSurface";
-import { colors, font, gradients, radius, shadow } from "@/constants/theme";
+import { colors, font, radius, shadow } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { APP_DEPT, APP_VERSION } from "@/lib/config";
 import { Platform } from "react-native";
+import { useBreakpoint, SIDEBAR_WIDTH } from "@/utils/responsive";
 // Optional: If you persist user data locally, uncomment the import below
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -38,6 +37,7 @@ export default function Profile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, setUser, logout: handleLogout } = useAuth();
+  const { isTabletUp } = useBreakpoint();
 
   const initials = (user?.vendorName || "Vendor")
     .split(" ")
@@ -53,31 +53,25 @@ export default function Profile() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
+    <View style={[styles.root, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
+      <StatusBar style="dark" />
       <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}>
         {/* HERO */}
-        <LinearGradient colors={gradients.candy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: insets.top + 24 }]}>
-          <View style={styles.heroBlob} />
-
-          <TouchableOpacity onPress={handleLogout} style={{ position: 'absolute', top: insets.top + 16, right: 20, zIndex: 10 }}>
-            <GlassSurface intensity="chip" tint="dark" borderRadius={14} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' } as any}>
-              <Icons.SignOut size={24} color="#fff" weight="bold" />
-            </GlassSurface>
+        <View style={[styles.hero, { paddingTop: insets.top + 24 }]}>
+          <TouchableOpacity onPress={handleLogout} style={{ position: 'absolute', top: insets.top + 16, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+            <Icons.SignOut size={24} color={colors.textBody} weight="bold" />
           </TouchableOpacity>
 
-          <Animated.View entering={ZoomIn.duration(600)}>
-            <GlassSurface intensity="hero" tint="dark" borderRadius={30} style={styles.avatar as any}>
-              <Text style={styles.avatarText}>{initials || "MH"}</Text>
-            </GlassSurface>
+          <Animated.View entering={ZoomIn.duration(600)} style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials || "MH"}</Text>
           </Animated.View>
           <Text style={styles.name} numberOfLines={1}>{user?.vendorName || "Emami Vendor"}</Text>
           <Text style={styles.email} numberOfLines={1}>{user?.Email || "vendor@emami.com"}</Text>
-          <GlassSurface intensity="chip" tint="dark" borderRadius={radius.pill} style={styles.badge as any}>
-            <Icons.SealCheck size={14} color="#fff" weight="fill" />
+          <View style={styles.badge}>
+            <Icons.SealCheck size={14} color={colors.brand} weight="fill" />
             <Text style={styles.badgeText}>Vendor {user?.vendorCode || ""}</Text>
-          </GlassSurface>
-        </LinearGradient>
+          </View>
+        </View>
 
         {/* OPTIONS */}
         <View style={styles.options}>
@@ -97,7 +91,7 @@ export default function Profile() {
           ))}
         </View>
 
-        <Text style={styles.version}>MouldHealth v{APP_VERSION} · {APP_DEPT}</Text>
+        <Text style={styles.version}>Mold Health Inspection v{APP_VERSION} · {APP_DEPT}</Text>
       </Animated.ScrollView>
     </View>
   );
@@ -109,29 +103,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 28,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: "hidden",
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  heroBlob: { position: "absolute", width: 220, height: 220, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.10)", top: -100, left: -50 },
   avatar: {
     width: 92,
     height: 92,
+    borderRadius: 30,
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "#fff", fontSize: 32, fontWeight: font.black },
-  name: { color: "#fff", fontSize: 22, fontWeight: font.black, marginTop: 14, letterSpacing: -0.4 },
-  email: { color: "rgba(255,255,255,0.9)", fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
+  avatarText: { color: colors.brand, fontSize: 32, fontWeight: font.black },
+  name: { color: colors.ink, fontSize: 22, fontWeight: font.black, marginTop: 14, letterSpacing: -0.4 },
+  email: { color: colors.textMuted, fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
   badge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius.pill,
     paddingHorizontal: 14,
     height: 30,
     marginTop: 12,
   },
-  badgeText: { color: "#fff", fontSize: font.caption, fontWeight: font.bold },
+  badgeText: { color: colors.brand, fontSize: font.caption, fontWeight: font.bold },
 
   options: { paddingHorizontal: 16, paddingTop: 20, gap: 12 },
   optionCard: {
@@ -250,7 +247,7 @@ const styles = StyleSheet.create({
 //           ))}
 //         </View>
 
-//         <Text style={styles.version}>MouldHealth v{APP_VERSION} · {APP_DEPT}</Text>
+//         <Text style={styles.version}>Mold Health Inspection v{APP_VERSION} · {APP_DEPT}</Text>
 //       </Animated.ScrollView>
 //     </View>
 //   );

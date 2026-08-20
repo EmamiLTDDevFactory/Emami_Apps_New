@@ -16,7 +16,6 @@ import {
 import Animated, { FadeInDown, Layout } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import GlassChip from "@/components/ui/GlassChip";
 import { colors, font, gradients, radius, shadow } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/config";
@@ -133,9 +132,15 @@ export default function InpSum() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const res = await api.post("/ZMM_MOULD_CARE_SRV/ZMouldDataHeaderSet", payload);
       if (res.status === 200 || res.status === 201) {
+        router.replace("/apps/mouldhealthcheck/(tabs)");
         completeActive();
         Alert.alert("Submitted", "Inspection summary has been successfully submitted.", [
-          { text: "Done", onPress: () => router.replace(user?.Role === "Admin" ? "/apps/mouldhealthcheck/(tabs)/admindashboard" : "/apps/mouldhealthcheck/(tabs)") },
+          {
+            text: "Done", onPress: () => {
+              //router.dismissAll();
+              router.replace("/apps/mouldhealthcheck/(tabs)");
+            }
+          },
         ]);
         setRows([]);
         setInspectedBy("");
@@ -156,25 +161,25 @@ export default function InpSum() {
       <StatusBar style="light" />
 
       {/* HEADER */}
-      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
-            <GlassChip size={40} tint="dark" style={styles.headerBtn}>
-              <Icons.List size={22} color="#fff" weight="bold" />
-            </GlassChip>
+            <View style={[styles.headerBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+              <Icons.List size={22} color={colors.textBody} weight="bold" />
+            </View>
           </TouchableOpacity>
-          <GlassChip size={44} tint="dark" style={styles.headerIcon}>
-            <Icons.ListChecks size={22} color="#fff" weight="fill" />
-          </GlassChip>
+          <View style={[styles.headerIcon, { backgroundColor: colors.brandSoft }]}>
+            <Icons.ListChecks size={22} color={colors.brand} weight="fill" />
+          </View>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <GlassChip size={40} tint="dark" style={styles.headerBtn}>
-              <Icons.X size={20} color="#fff" weight="bold" />
-            </GlassChip>
+            <View style={[styles.headerBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+              <Icons.X size={20} color={colors.textBody} weight="bold" />
+            </View>
           </TouchableOpacity>
         </View>
         <Text style={styles.title}>Inspection Summary</Text>
         <Text style={styles.subtitle}>Condition · action · remarks matrix</Text>
-      </LinearGradient>
+      </View>
 
       <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 110 }}>
         {/* INSPECTOR DETAILS */}
@@ -316,12 +321,12 @@ const RowRead = ({ label, value }: { label: string; value: string }) => (
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 16, paddingBottom: 18, borderBottomLeftRadius: 26, borderBottomRightRadius: 26 },
+  header: { paddingHorizontal: 16, paddingBottom: 18, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerBtn: { width: 40, height: 40, borderRadius: 13 },
-  headerIcon: { width: 44, height: 44, borderRadius: 14 },
-  title: { color: "#fff", fontSize: font.h3, fontWeight: font.black, marginTop: 14 },
-  subtitle: { color: "rgba(255,255,255,0.88)", fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
+  headerBtn: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  headerIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  title: { color: colors.ink, fontSize: font.h3, fontWeight: font.black, marginTop: 14 },
+  subtitle: { color: colors.textMuted, fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
 
   infoCard: { flexDirection: "row", alignItems: "flex-end", gap: 12, backgroundColor: colors.surface, borderRadius: radius._20, borderWidth: 1, borderColor: colors.border, padding: 14, marginTop: 16 },
   infoLabel: { fontSize: font.caption, fontWeight: font.bold, color: colors.textMuted, marginBottom: 6 },

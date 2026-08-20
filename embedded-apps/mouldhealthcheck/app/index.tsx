@@ -33,7 +33,7 @@ export default function Splash() {
       </Animated.View>
 
       <Animated.Text entering={FadeInDown.delay(300).duration(700)} style={styles.title}>
-        MouldHealth
+        Mold Health Inspection
       </Animated.Text>
       <Animated.Text entering={FadeInDown.delay(450).duration(700)} style={styles.tagline}>
         Smart mould inspection, simplified

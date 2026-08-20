@@ -1,8 +1,7 @@
-import GlassCard from "@/components/ui/GlassCard";
+import Card from "@/components/ui/Card";
 import GradientButton from "@/components/ui/GradientButton";
-import { colors, font, gradients, radius } from "@/constants/theme";
+import { colors, font, radius } from "@/constants/theme";
 import { useBreakpoint } from "@/utils/responsive";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Icons from "phosphor-react-native";
@@ -29,23 +28,17 @@ export default function Welcome() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
-
-      {/* Colorful gradient backdrop + soft blobs — same on every breakpoint. */}
-      <LinearGradient colors={gradients.aurora} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <View style={[styles.blob, styles.blobPink]} />
-      <View style={[styles.blob, styles.blobBlue]} />
-      <View style={[styles.blob, styles.blobTeal]} />
+      <StatusBar style="dark" />
 
       <View style={[styles.scrollArea, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24, paddingHorizontal: contentPad }]}>
         <Animated.View entering={ZoomIn.duration(600)} style={{ width: "100%", alignItems: "center" }}>
-          <GlassCard intensity="hero" tint="dark" style={[styles.card, { width: cardWidth, maxWidth: "100%" }]}>
+          <Card style={[styles.card, { width: cardWidth, maxWidth: "100%" }]}>
             <View style={styles.logoPill}>
               <Image source={{ uri: LOGO_BASE64 }} style={styles.logo} resizeMode="contain" />
             </View>
 
             <Animated.Text entering={FadeInDown.delay(180).duration(600)} style={styles.heroTitle}>
-              MouldHealth Inspection Portal
+              Mold Health Inspection Portal
             </Animated.Text>
             <Animated.Text entering={FadeInDown.delay(280).duration(600)} style={styles.heroSub}>
               The smart way to inspect &amp; maintain your moulds
@@ -77,7 +70,7 @@ export default function Welcome() {
               />
               <Pressable style={styles.signupRow} onPress={() => router.push("/apps/mouldhealthcheck/(auth)/register")} />
             </Animated.View>
-          </GlassCard>
+          </Card>
 
           <Text style={styles.footerText}>© 2026 Mold Inspection Portal - Emami Limited. All rights reserved.</Text>
         </Animated.View>
@@ -87,12 +80,8 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink, overflow: "hidden" },
+  root: { flex: 1, backgroundColor: colors.bg },
   scrollArea: { flex: 1, alignItems: "center", justifyContent: "center" },
-  blob: { position: "absolute", borderRadius: 999 },
-  blobPink: { width: 340, height: 340, backgroundColor: "rgba(236,72,153,0.30)", top: "8%", left: "-8%" },
-  blobBlue: { width: 300, height: 300, backgroundColor: "rgba(45,127,249,0.28)", bottom: "6%", right: "-6%" },
-  blobTeal: { width: 220, height: 220, backgroundColor: "rgba(20,184,166,0.22)", top: "45%", right: "12%" },
   card: {
     padding: 32,
     alignItems: "center",
@@ -103,14 +92,14 @@ const styles = StyleSheet.create({
   },
   logo: { width: 100, height: 100 },
   heroTitle: {
-    color: "#fff",
+    color: colors.ink,
     fontSize: font.h3,
     fontWeight: font.black,
     marginBottom: 8,
     textAlign: "center",
   },
   heroSub: {
-    color: "rgba(255,255,255,0.82)",
+    color: colors.textMuted,
     fontSize: font.sub,
     fontWeight: font.medium,
     textAlign: "center",
@@ -123,7 +112,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: 12,
     borderRadius: radius._15,
   },
@@ -131,16 +122,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#fff",
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureTitle: { fontSize: font.body, fontWeight: font.bold, color: "#fff" },
-  featureSub: { fontSize: font.micro, color: "rgba(255,255,255,0.7)", marginTop: 2 },
+  featureTitle: { fontSize: font.body, fontWeight: font.bold, color: colors.ink },
+  featureSub: { fontSize: font.micro, color: colors.textMuted, marginTop: 2 },
   signupRow: { flexDirection: "row", justifyContent: "center", marginTop: 16 },
   footerText: {
     marginTop: 24,
-    color: "rgba(255,255,255,0.65)",
+    color: colors.textFaint,
     fontSize: font.micro,
     fontWeight: font.medium,
     textAlign: "center",

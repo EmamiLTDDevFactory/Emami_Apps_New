@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Platform, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, View, StyleSheet, Platform, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, shadow, font } from '@/constants/theme';
@@ -7,24 +7,122 @@ import * as Icons from 'phosphor-react-native';
 import { useBreakpoint } from '@/utils/responsive';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 
-// Map city names to rough lat/lng coordinates
+// Map city/town names to real lat/lng coordinates. Ordered most-specific-first so e.g. "GREATER NOIDA"
+// or "NAVI MUMBAI" match their own entry before falling through to a broader "NOIDA"/"MUMBAI" match —
+// Noida, Gurgaon and Delhi used to all collapse onto Delhi's point; they're real, distinct locations now.
+const KNOWN_CITY_COORDS: [string[], number, number][] = [
+  // Delhi NCR
+  [['GREATER NOIDA'], 77.5006, 28.4744],
+  [['NOIDA'], 77.3910, 28.5355],
+  [['GURGAON', 'GURUGRAM'], 77.0266, 28.4595],
+  [['FARIDABAD'], 77.3178, 28.4089],
+  [['MANESAR'], 76.9350, 28.3540],
+  [['BAHADURGARH'], 76.9310, 28.6930],
+  [['SONEPAT', 'SONIPAT'], 77.0151, 28.9931],
+  [['ROHTAK'], 76.6066, 28.8955],
+  [['PANIPAT'], 76.9635, 29.3909],
+  [['GHAZIABAD'], 77.4538, 28.6692],
+  [['MEERUT'], 77.7064, 28.9845],
+  [['KARNAL'], 76.9905, 29.6857],
+  [['DELHI'], 77.2090, 28.6139],
+
+  // Maharashtra
+  [['NAVI MUMBAI'], 73.0297, 19.0330],
+  [['THANE'], 72.9781, 19.2183],
+  [['TALOJ'], 73.0930, 19.0820],
+  [['BHIWANDI'], 73.0483, 19.3002],
+  [['VASAI'], 72.8397, 19.4912],
+  [['AMBERNATH'], 73.1867, 19.2002],
+  [['MUMBAI', 'BOMBAY'], 72.8777, 19.0760],
+  [['PIMPRI', 'CHINCHWAD', 'BHOSARI', 'CHAKAN'], 73.8, 18.65],
+  [['PUNE'], 73.8567, 18.5204],
+  [['NASHIK'], 73.7898, 19.9975],
+  [['AURANGABAD'], 75.3433, 19.8762],
+  [['KOLHAPUR'], 74.2433, 16.7050],
+  [['NAGPUR'], 79.0882, 21.1458],
+
+  // Gujarat
+  [['AHMEDABAD'], 72.5714, 23.0225],
+  [['VADODARA', 'BARODA'], 73.1812, 22.3072],
+  [['SURAT'], 72.8311, 21.1702],
+  [['RAJKOT'], 70.8022, 22.3039],
+  [['SANAND'], 72.3833, 22.9926],
+  [['HALOL'], 73.4667, 22.5],
+  [['SILVASSA'], 73.0169, 20.2666],
+  [['VAPI'], 72.9089, 20.3703],
+  [['DAMAN'], 72.8397, 20.3974],
+
+  // Rajasthan
+  [['BHIWADI'], 76.8645, 27.8134],
+  [['NEEMRANA'], 76.3853, 27.9925],
+  [['ALWAR'], 76.6346, 27.5665],
+  [['JAIPUR'], 75.7873, 26.9124],
+
+  // Madhya Pradesh
+  [['PITHAMPUR'], 75.6873, 22.6067],
+  [['INDORE'], 75.8577, 22.7196],
+  [['BHOPAL'], 77.4126, 23.2599],
+
+  // Himachal Pradesh
+  [['BADDI'], 76.7909, 30.9578],
+  [['SOLAN'], 77.0996, 30.9045],
+  [['PARWANOO'], 76.9612, 30.8386],
+  [['KALA AMB'], 77.2075, 30.4772],
+
+  // Uttarakhand
+  [['PANTNAGAR'], 79.4939, 29.0253],
+  [['RUDRAPUR'], 79.4128, 28.9862],
+  [['KASHIPUR'], 78.9622, 29.2151],
+  [['HARIDWAR'], 78.1642, 29.9457],
+  [['DEHRADUN'], 78.0322, 30.3165],
+
+  // Uttar Pradesh
+  [['KANPUR'], 80.3319, 26.4499],
+  [['LUCKNOW'], 80.9462, 26.8467],
+  [['AGRA'], 78.0081, 27.1767],
+
+  // Punjab / Haryana
+  [['LUDHIANA'], 75.8573, 30.9010],
+  [['CHANDIGARH'], 76.7794, 30.7333],
+  [['JALANDHAR'], 75.5762, 31.3260],
+
+  // West Bengal / Northeast
+  [['KOLKATA', 'CALCUTTA'], 88.3639, 22.5726],
+  [['HOWRAH'], 88.2636, 22.5958],
+  [['DURGAPUR'], 87.3119, 23.5204],
+  [['HALDIA'], 88.0698, 22.0667],
+  [['GUWAHATI', 'AMINGAON'], 91.7362, 26.1445],
+
+  // South India
+  [['CHENNAI', 'MADRAS'], 80.2707, 13.0827],
+  [['SRIPERUMBUDUR'], 79.9456, 12.9675],
+  [['HOSUR'], 77.8258, 12.7409],
+  [['COIMBATORE'], 76.9558, 11.0168],
+  [['BANGALORE', 'BENGALURU'], 77.5946, 12.9716],
+  [['MYSORE', 'MYSURU'], 76.6394, 12.2958],
+  [['HYDERABAD'], 78.4867, 17.3850],
+  [['VIJAYAWADA'], 80.6480, 16.5062],
+  [['VISAKHAPATNAM', 'VIZAG'], 83.2185, 17.6868],
+  [['KOCHI', 'COCHIN'], 76.2673, 9.9312],
+
+  // East / Central
+  [['BHUBANESWAR'], 85.8245, 20.2961],
+  [['PATNA'], 85.1376, 25.5941],
+];
+
+/** Longest-name-first substring match against every known city so "GREATER NOIDA" doesn't
+ * accidentally match a shorter unrelated alias first. */
+const CITY_LOOKUP = KNOWN_CITY_COORDS
+  .flatMap(([aliases, lng, lat]) => aliases.map((alias) => ({ alias, lng, lat })))
+  .sort((a, b) => b.alias.length - a.alias.length);
+
 const mapCityToLngLat = (cityName: string): [number, number] => {
   const c = (cityName || '').toUpperCase();
-  if (c.includes('KOLKATA') || c.includes('CALCUTTA')) return [88.3639, 22.5726];
-  if (c.includes('TALOJ') || c.includes('MUMBAI') || c.includes('BOMBAY')) return [73.1143, 19.0583]; // Mumbai/Taloja
-  if (c.includes('DELHI') || c.includes('NOIDA') || c.includes('GURGAON')) return [77.2090, 28.6139];
-  if (c.includes('CHENNAI') || c.includes('MADRAS')) return [80.2707, 13.0827];
-  if (c.includes('BANGALORE') || c.includes('BENGALURU')) return [77.5946, 12.9716];
-  if (c.includes('AHMEDABAD')) return [72.5714, 23.0225];
-  if (c.includes('PUNE')) return [73.8567, 18.5204];
-  if (c.includes('HYDERABAD')) return [78.4867, 17.3850];
-  if (c.includes('GUWAHATI') || c.includes('ASSAM') || c.includes('AMINGAON')) return [91.7362, 26.1445];
-  if (c.includes('PANTNAGAR') || c.includes('RUDRAPUR')) return [79.4939, 29.0253];
-  if (c.includes('BADDI')) return [76.7909, 30.9578];
-  if (c.includes('VAPI')) return [72.9089, 20.3703];
-  if (c.includes('DAMAN')) return [72.8397, 20.3974];
-  
-  // Scatter unknown cities pseudo-randomly within India (lng: 70-90, lat: 10-30)
+  const match = CITY_LOOKUP.find((entry) => c.includes(entry.alias));
+  if (match) return [match.lng, match.lat];
+
+  // Unrecognized city — no real coordinate available. Scatter within India (lng: 70-90, lat: 10-30)
+  // rather than mis-plotting it on top of an unrelated real city.
   let hash = 0;
   for (let i = 0; i < c.length; i++) {
      hash = c.charCodeAt(i) + ((hash << 5) - hash);
@@ -33,6 +131,13 @@ const mapCityToLngLat = (cityName: string): [number, number] => {
   const lat = 12 + ((Math.abs(hash) >> 2) % 15);
   return [lng, lat];
 };
+
+const groupBy = <T,>(array: T[], key: (item: T) => string): Record<string, T[]> =>
+  array.reduce((result: Record<string, T[]>, item) => {
+    const k = key(item);
+    (result[k] = result[k] || []).push(item);
+    return result;
+  }, {});
 
 const getHtmlContent = (cityDataStr: string, activeMetric: string) => `
 <!DOCTYPE html>
@@ -203,7 +308,9 @@ const getHtmlContent = (cityDataStr: string, activeMetric: string) => `
       
       let maxValue = 1;
       cityData.forEach(c => {
-         const val = c.total;
+         let val = c.total;
+         if (activeMetric === 'Running') val = c.running;
+         if (activeMetric === 'NPA') val = c.npa;
          if (val > maxValue) maxValue = val;
       });
 
@@ -212,33 +319,53 @@ const getHtmlContent = (cityDataStr: string, activeMetric: string) => `
       const npaFeatures = [];
       
       cityData.forEach(c => {
-        // Running circle (offset slightly left)
-        if (c.running > 0) {
-          runFeatures.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [c.lng - 0.3, c.lat] },
-            properties: { ...c, metricVal: c.running }
-          });
-        }
-        // NPA circle (offset slightly right)
-        if (c.npa > 0) {
-          npaFeatures.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [c.lng + 0.3, c.lat] },
-            properties: { ...c, metricVal: c.npa }
-          });
-        }
-        // If both are 0, still show a small total dot
-        if (c.running === 0 && c.npa === 0) {
-          runFeatures.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
-            properties: { ...c, metricVal: 1 }
-          });
+        if (activeMetric === 'Total') {
+          // Running circle (offset slightly left)
+          if (c.running > 0) {
+            runFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [c.lng - 0.3, c.lat] },
+              properties: { ...c, metricVal: c.running }
+            });
+          }
+          // NPA circle (offset slightly right)
+          if (c.npa > 0) {
+            npaFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [c.lng + 0.3, c.lat] },
+              properties: { ...c, metricVal: c.npa }
+            });
+          }
+          // If both are 0, still show a small total dot
+          if (c.running === 0 && c.npa === 0) {
+            runFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+              properties: { ...c, metricVal: 1 }
+            });
+          }
+        } else if (activeMetric === 'Running') {
+          if (c.running > 0) {
+            runFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+              properties: { ...c, metricVal: c.running }
+            });
+          }
+        } else if (activeMetric === 'NPA') {
+          if (c.npa > 0) {
+            npaFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+              properties: { ...c, metricVal: c.npa }
+            });
+          }
         }
       });
 
-      // All cities source (for labels and interaction)
+      // All cities source (for labels and interaction). Materials are JSON-stringified since GL JS
+      // feature properties aren't guaranteed to round-trip nested arrays/objects — parsed back out
+      // in the click handler below.
       map.addSource('cities-all', {
          type: 'geojson',
          data: {
@@ -246,7 +373,7 @@ const getHtmlContent = (cityDataStr: string, activeMetric: string) => `
             features: cityData.map(c => ({
                type: 'Feature',
                geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
-               properties: c
+               properties: { city: c.city, total: c.total, running: c.running, npa: c.npa, materials: JSON.stringify(c.materials) }
             }))
          }
       });
@@ -389,28 +516,21 @@ const getHtmlContent = (cityDataStr: string, activeMetric: string) => `
 
       map.on('click', 'city-interact', (e) => {
         const props = e.features[0].properties;
-        const popupHtml = \`
-           <div class="popup-title">\${props.city}</div>
-           <div class="popup-stat-row">
-             <div class="popup-stat-dot" style="background:#6366F1"></div>
-             <span class="popup-stat-label">Total Assets</span>
-             <span class="popup-stat-val" style="color:#6366F1">\${props.total}</span>
-           </div>
-           <div class="popup-stat-row">
-             <div class="popup-stat-dot" style="background:#10B981"></div>
-             <span class="popup-stat-label">Running</span>
-             <span class="popup-stat-val" style="color:#10B981">\${props.running}</span>
-           </div>
-           <div class="popup-stat-row">
-             <div class="popup-stat-dot" style="background:#F43F5E"></div>
-             <span class="popup-stat-label">NPA</span>
-             <span class="popup-stat-val" style="color:#F43F5E">\${props.npa}</span>
-           </div>
-        \`;
-        new maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(popupHtml)
-          .addTo(map);
+        // Tell the host app (React Native / web parent) to open the full Brand > Sub Brand > Vendor >
+        // Material breakdown dialog for this city — richer than a map popup can show.
+        const payload = JSON.stringify({
+          type: 'city-click',
+          city: props.city,
+          total: props.total,
+          running: props.running,
+          npa: props.npa,
+          materials: JSON.parse(props.materials),
+        });
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(payload);
+        } else if (window.parent) {
+          window.parent.postMessage(payload, '*');
+        }
       });
 
       map.on('mouseenter', 'city-interact', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -424,13 +544,45 @@ const getHtmlContent = (cityDataStr: string, activeMetric: string) => `
 export default function GeoMap3D({ data = [] }: { data?: any[] }) {
   const { isTabletUp: isTablet } = useBreakpoint();
   const [activeMetric, setActiveMetric] = useState<'Total' | 'Running' | 'NPA'>('Total');
-  
-  type StatData = { total: number; running: number; npa: number; lat: number; lng: number };
 
-  // 1. Process data for Map (Aggregated by City)
+  type CityMaterial = { brandName: string; subBrandName: string; vendorName: string; moldCode: string; moldDescription: string; status: 'Running Asset' | 'NPA Asset'; cost: number; depreciation: number };
+  type StatData = { total: number; running: number; npa: number; lat: number; lng: number; materials: CityMaterial[] };
+  type CityClickPayload = { type: 'city-click'; city: string; total: number; running: number; npa: number; materials: CityMaterial[] };
+
+  // Bubble-tap detail dialog — populated from the map's postMessage (web: window message event,
+  // native: WebView onMessage), since a maplibre popup alone can't show a full Brand > Sub Brand >
+  // Vendor > Material breakdown.
+  const [cityDetail, setCityDetail] = useState<CityClickPayload | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handleMessage = (event: MessageEvent) => {
+      if (typeof event.data !== 'string') return;
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed && parsed.type === 'city-click') setCityDetail(parsed);
+      } catch {
+        // ignore unrelated postMessage traffic (e.g. from maplibre's own iframe internals)
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleNativeMessage = (data: string) => {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed && parsed.type === 'city-click') setCityDetail(parsed);
+    } catch {
+      // ignore malformed payloads
+    }
+  };
+
+  // 1. Process data for Map (Aggregated by City) — also keeps the full per-material list (brand/sub
+  // brand/vendor/status/value) per city so a bubble tap can show the full breakdown, not just counts.
   const cityData = React.useMemo(() => {
     const map = new Map<string, StatData>();
-    
+
     const sourceData = data.length > 0 ? data : [
        { VendCity: 'KOLKATA', ZRUNNING: 'X' }, { VendCity: 'TALOJ23', ZNPA: 'X' },
        { VendCity: 'DELHI', ZRUNNING: 'X' }, { VendCity: 'GUWAHATI', ZNPA: 'X' },
@@ -440,22 +592,34 @@ export default function GeoMap3D({ data = [] }: { data?: any[] }) {
     sourceData.forEach(item => {
       const rawCity = item.VendCity || item.CITY || item.city || item.VEND_CITY || item.VEND_REG_NAME || 'Unknown City';
       const cityName = rawCity.toUpperCase();
-      
+
       if (!map.has(cityName)) {
         const [lng, lat] = mapCityToLngLat(cityName);
-        map.set(cityName, { total: 0, running: 0, npa: 0, lat, lng });
+        map.set(cityName, { total: 0, running: 0, npa: 0, lat, lng, materials: [] });
       }
-      
+
       const loc = map.get(cityName)!;
       loc.total += 1;
-      
-      if (item.ZRUNNING === 'X' || item.Zrunning === 'X' || item.status === 'Running Asset') {
-         loc.running += 1;
-      } else if (item.ZNPA === 'X' || item.Znpa === 'X' || item.status === 'NPA Asset') {
-         loc.npa += 1;
-      } else {
-         loc.running += 1;
-      }
+
+      const status: 'Running Asset' | 'NPA Asset' =
+        (item.ZRUNNING === 'X' || item.Zrunning === 'X' || item.status === 'Running Asset')
+          ? 'Running Asset'
+          : (item.ZNPA === 'X' || item.Znpa === 'X' || item.status === 'NPA Asset')
+            ? 'NPA Asset'
+            : 'Running Asset';
+
+      if (status === 'Running Asset') loc.running += 1; else loc.npa += 1;
+
+      loc.materials.push({
+        brandName: item.BRANDDESC || item.BrandDesc || item.Branddesc || item.brandDesc || 'Unknown Brand',
+        subBrandName: item.SUBBRANDDESC || item.SubBrandDesc || item.Subbranddesc || item.subBrandDesc || 'Unspecified',
+        vendorName: item.NAME1 || item.Name1 || `Vendor ${item.LIFNR || item.Lifnr || ''}`,
+        moldCode: item.MATNR || item.Matnr || '',
+        moldDescription: item.MAKTX || item.Maktx || item.moldDescription || item.description || 'Unnamed material',
+        status,
+        cost: parseFloat(item.KANSW || item.Kansw || '0'),
+        depreciation: parseFloat(item.KNAFA || item.Knafa || '0'),
+      });
     });
 
     return Array.from(map.entries()).map(([city, stats]) => ({ city, ...stats }));
@@ -582,12 +746,14 @@ export default function GeoMap3D({ data = [] }: { data?: any[] }) {
         <View style={[styles.mapWrap, isTablet && { flex: 2.5 }]}>
           {Platform.OS === 'web' ? (
             <iframe 
+              key={activeMetric}
               srcDoc={htmlContent} 
               style={{ width: '100%', height: '100%', border: 'none', borderRadius: 20 } as any} 
               sandbox="allow-scripts allow-same-origin"
             />
           ) : (
             <WebView
+              key={activeMetric}
               source={{ html: htmlContent }}
               style={styles.webview}
               scrollEnabled={false}
@@ -597,6 +763,7 @@ export default function GeoMap3D({ data = [] }: { data?: any[] }) {
               originWhitelist={['*']}
               javaScriptEnabled={true}
               domStorageEnabled={true}
+              onMessage={(event) => handleNativeMessage(event.nativeEvent.data)}
             />
           )}
           
@@ -689,9 +856,88 @@ export default function GeoMap3D({ data = [] }: { data?: any[] }) {
           </ScrollView>
         </View>
       </View>
+
+      {/* Bubble-tap detail dialog — Brand > Sub Brand > Vendor > Material breakdown for the tapped city,
+          with Running/NPA segregation and values visible at every level. */}
+      <Modal visible={!!cityDetail} transparent animationType="fade" onRequestClose={() => setCityDetail(null)}>
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogCard}>
+            <View style={styles.dialogHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dialogTitle} numberOfLines={1}>{cityDetail?.city}</Text>
+                <Text style={styles.dialogSubtitle}>
+                  {cityDetail?.total ?? 0} material{(cityDetail?.total ?? 0) === 1 ? '' : 's'} · {cityDetail?.running ?? 0} Running · {cityDetail?.npa ?? 0} NPA
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setCityDetail(null)} style={{ padding: 4 }}>
+                <Icons.X size={20} color="#6B7280" weight="bold" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+              {Object.entries(groupBy(cityDetail?.materials ?? [], (m) => m.brandName)).map(([brandName, brandMaterials]) => (
+                <View key={brandName} style={styles.dialogBrandBlock}>
+                  <DialogGroupHeader label={brandName} materials={brandMaterials} icon={Icons.Tag} />
+                  {Object.entries(groupBy(brandMaterials, (m) => m.subBrandName)).map(([subBrandName, subBrandMaterials]) => (
+                    <View key={subBrandName} style={styles.dialogSubBrandBlock}>
+                      <DialogGroupHeader label={subBrandName} materials={subBrandMaterials} icon={Icons.Bookmark} indent={16} />
+                      {Object.entries(groupBy(subBrandMaterials, (m) => m.vendorName)).map(([vendorName, vendorMaterials]) => (
+                        <View key={vendorName} style={styles.dialogVendorBlock}>
+                          <DialogGroupHeader label={vendorName} materials={vendorMaterials} icon={Icons.Buildings} indent={32} />
+                          {vendorMaterials.map((m, idx) => {
+                            const isRunning = m.status === 'Running Asset';
+                            return (
+                              <View key={`${m.moldCode}-${idx}`} style={styles.dialogMaterialRow}>
+                                <View style={[styles.dialogStatusDot, { backgroundColor: isRunning ? '#10B981' : '#F43F5E' }]} />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.dialogMaterialTitle} numberOfLines={1}>{m.moldDescription}</Text>
+                                  <Text style={styles.dialogMaterialCode}>Code: {m.moldCode}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                  <Text style={[styles.dialogStatusPillText, { color: isRunning ? '#10B981' : '#F43F5E' }]}>{isRunning ? 'Running' : 'NPA'}</Text>
+                                  <Text style={styles.dialogMaterialValue}>₹{m.cost.toLocaleString('en-IN')}</Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              ))}
+              {!cityDetail?.materials?.length && (
+                <Text style={{ padding: 20, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No material details available for this location.</Text>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.dialogCloseBtn} onPress={() => setCityDetail(null)}>
+              <Text style={styles.dialogCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+/** Group header row (Brand / Sub Brand / Vendor level) — name + Running/NPA counts + Acquisition value. */
+const DialogGroupHeader = ({ label, materials, icon: Icon, indent = 0 }: { label: string; materials: any[]; icon: Icons.Icon; indent?: number }) => {
+  const running = materials.filter((m) => m.status === 'Running Asset').length;
+  const npa = materials.filter((m) => m.status === 'NPA Asset').length;
+  const cost = materials.reduce((s, m) => s + (m.cost || 0), 0);
+  return (
+    <View style={[styles.dialogGroupHeader, { marginLeft: indent }]}>
+      <Icon size={13} color="#6366F1" weight="bold" />
+      <Text style={styles.dialogGroupLabel} numberOfLines={1}>{label}</Text>
+      <View style={styles.dialogGroupStats}>
+        <Text style={[styles.dialogGroupStatText, { color: '#10B981' }]}>{running} Run</Text>
+        <Text style={[styles.dialogGroupStatText, { color: '#F43F5E' }]}>{npa} NPA</Text>
+        <Text style={[styles.dialogGroupStatText, { color: '#6366F1' }]}>₹{cost.toLocaleString('en-IN')}</Text>
+      </View>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -886,5 +1132,72 @@ const styles = StyleSheet.create({
     fontWeight: '900' as any,
     minWidth: 24,
     textAlign: 'right',
-  }
+  },
+
+  // Bubble-tap Brand > Sub Brand > Vendor > Material breakdown dialog
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  dialogCard: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 30,
+    elevation: 12,
+  },
+  dialogHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingBottom: 14,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  dialogTitle: { fontSize: 17, fontWeight: '900' as any, color: '#111827' },
+  dialogSubtitle: { fontSize: 12, color: '#6B7280', fontWeight: '600' as any, marginTop: 3 },
+  dialogBrandBlock: { marginBottom: 14 },
+  dialogSubBrandBlock: { marginTop: 8 },
+  dialogVendorBlock: { marginTop: 6 },
+  dialogGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  dialogGroupLabel: { flex: 1, fontSize: 13, fontWeight: '800' as any, color: '#111827' },
+  dialogGroupStats: { flexDirection: 'row', gap: 10 },
+  dialogGroupStatText: { fontSize: 11, fontWeight: '800' as any },
+  dialogMaterialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginLeft: 44,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+  },
+  dialogStatusDot: { width: 8, height: 8, borderRadius: 4 },
+  dialogMaterialTitle: { fontSize: 13, fontWeight: '700' as any, color: '#111827' },
+  dialogMaterialCode: { fontSize: 10, color: '#9CA3AF', fontWeight: '600' as any, marginTop: 1 },
+  dialogStatusPillText: { fontSize: 10, fontWeight: '900' as any },
+  dialogMaterialValue: { fontSize: 12, fontWeight: '800' as any, color: '#111827', marginTop: 2 },
+  dialogCloseBtn: {
+    marginTop: 14,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  dialogCloseBtnText: { fontSize: 13, fontWeight: '800' as any, color: '#111827' },
 });

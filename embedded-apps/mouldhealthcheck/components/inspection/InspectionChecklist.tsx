@@ -1,6 +1,5 @@
 import SidePane from "@/components/SidePane";
 import EmptyState from "@/components/ui/EmptyState";
-import GlassChip from "@/components/ui/GlassChip";
 import { colors, font, gradients, radius, shadow } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/config";
@@ -10,6 +9,7 @@ import { DonutChart } from "@/components/ui/charts";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useGlobalSearchParams, useRouter } from "expo-router";
@@ -37,12 +37,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  
 type Item = { id: string; task: string; remarks: string; decision: "" | "Yes" | "No"; photos: { uri: string; base64?: string; name: string; type: string }[] };
 
+/** Read-only mould master data (Number of Cavity, Mould Life, Cycle Time, Total Shots) shown on the Cavity & Core page. */
+type MouldMaster = { numberOfCavity: string; mouldLife: string; cycleTime: string; mouldShots: string };
+
 type Props = {
   /** 2-letter module code (== ZmouldHeadId on /dropdown and ZmouldColId on /submit). */
   code: string;
   title: string;
   subtitle?: string;
   icon?: ReactNode;
+  /** Cavity & Core only: shows the mould master data card (Number/Running Cavity, Cycle Time, Total Shots)
+   * above the checklist, with Running Cavity / Current Cycle Time / Current Shots editable by the vendor. */
+  showMouldMasterData?: boolean;
 };
 
 const ChecklistSwitch = ({ value, onChange }: { value: "" | "Yes" | "No", onChange: (v: "Yes" | "No") => void }) => {
@@ -81,19 +87,29 @@ const ChecklistSwitch = ({ value, onChange }: { value: "" | "Yes" | "No", onChan
 * Records live progress to the inspection store and lets the user attach defect
 * photos to any item marked "No".
 */
-export default function InspectionChecklist({ code, title, subtitle, icon }: Props) {
+export default function InspectionChecklist({ code, title, subtitle, icon, showMouldMasterData }: Props) {
   const { user } = useAuth();
   const { recordModule, addPhotos, activeCode } = useInspection();
   const insets = useSafeAreaInsets();
   const router = useRouter();
- 
+
   // Extract the parameters passed from DashboardScreen or SidePane
   const searchParams = useGlobalSearchParams();
   const materialCode = (searchParams.materialCode || searchParams.Matnr || searchParams.matnr) as string;
   const vendorCode = (searchParams.vendorCode || searchParams.Lifnr || searchParams.lifnr) as string;
-  
+
   const activeMaterialCode = materialCode || activeCode || user?.matnr;
   const activeVendorCode = vendorCode || user?.vendorCode || user?.Vendor;
+
+  // Mould master data (Cavity & Core only) — numberOfCavity/mouldLife/cycleTime/mouldShots are
+  // read-only master values from ZMouldDetailsSet; runningCavity/currentCycleTime/currentShots are
+  // vendor-editable (pre-filled from a previous draft's ZmouldItemSet rows when one exists, since
+  // there's no dedicated backend field for these yet — they ride along as extra rows in the same
+  // ZmouldItemSet the checklist answers already save to).
+  const [mouldMaster, setMouldMaster] = useState<MouldMaster>({ numberOfCavity: "", mouldLife: "", cycleTime: "", mouldShots: "" });
+  const [runningCavity, setRunningCavity] = useState("");
+  const [currentCycleTime, setCurrentCycleTime] = useState("");
+  const [currentShots, setCurrentShots] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -120,19 +136,24 @@ const load = async () => {
 
     //     api.get("/ZMouldGetDataSet", { params: { 
  
-      // 2. Extract the template questions
-      const [{ data }, { data: data1 }] = await Promise.all([
+      // 2. Extract the template questions (+ mould master data, Cavity & Core only)
+      const [{ data }, { data: data1 }, masterRes] = await Promise.all([
         api.get("/ZMM_MOULD_CARE_SRV/ZMouldDropDownSet", {
           params: { $filter: `ZmouldCatId eq '02' and ZmouldHeadId eq '${code}'`, $format: "json" }
         }),
         api.get("/ZMM_MOULD_CARE_SRV/ZMouldGetDataSet", {
           params: { $filter: `Matnr eq '${activeMaterialCode}' and Lifnr eq '${activeVendorCode}'`, $format: "json" }
-        }).catch(() => ({ data: null }))
+        }).catch(() => ({ data: null })),
+        showMouldMasterData
+          ? api.get("/ZMM_MOULD_CARE_SRV/ZMouldDetailsSet", {
+              params: { $filter: `Matnr eq '${activeMaterialCode}' and Lifnr eq '${activeVendorCode}'`, $format: "json" }
+            }).catch(() => ({ data: null }))
+          : Promise.resolve({ data: null }),
       ]);
 
       const templateQuestions = data?.d?.results || [];
       const rawSavedData = data1?.d?.results || [];
- 
+
       // 4. Create a Lookup Dictionary to map the keys to task names
       const savedDataMap: Record<string, { decision: string; remarks: string }> = {};
       rawSavedData.forEach((savedItem: any) => {
@@ -147,6 +168,21 @@ const load = async () => {
           }
         }
       });
+
+      if (showMouldMasterData) {
+        const master = masterRes?.data?.d?.results?.[0] || {};
+        setMouldMaster({
+          numberOfCavity: master.ZzcavityNo || "",
+          mouldLife: master.ZzmouldLife || master.ZzmoldLife || "",
+          cycleTime: master.ZzcycTime || "",
+          mouldShots: master.ZzmouldShots || master.ZzmoldShots || "",
+        });
+        // Running Cavity defaults to the master value; Current Cycle Time / Current Shots have no
+        // master default — all three fall back to a previously-saved draft value when one exists.
+        setRunningCavity(savedDataMap["Running Cavity"]?.decision || master.ZzrunCavity || "");
+        setCurrentCycleTime(savedDataMap["Current Cycle Time"]?.decision || "");
+        setCurrentShots(savedDataMap["Current Shots"]?.decision || "");
+      }
  
       // 5. Merge the standard Template with our new Dictionary
       const finalItems: Item[] = templateQuestions.map((d: any, i: number) => {
@@ -204,6 +240,57 @@ const load = async () => {
   const reset = (id: string) =>
     setData((p) => p.map((it) => (it.id === id ? { ...it, decision: "", remarks: "", photos: [] } : it)));
  
+  // Attachments ride along as base64 inside the ZmouldDataHeaderSet POST body (no separate upload
+  // endpoint). Beyond avoiding SAP Gateway's 413/large-payload issues, each attached file must stay
+  // within ~70KB per an explicit requirement, so compression tries progressively smaller
+  // width/quality combinations (most-lenient first) until the file is at or under that target,
+  // falling back to whatever got smallest if none of the steps quite reach it.
+  const TARGET_FILE_BYTES = 70 * 1024;
+  const MAX_IMAGE_WIDTH = 1280;
+  const MIN_IMAGE_WIDTH = 320;
+  const COMPRESSION_STEPS = [
+    { width: MAX_IMAGE_WIDTH, quality: 0.6 },
+    { width: MAX_IMAGE_WIDTH, quality: 0.4 },
+    { width: 960, quality: 0.4 },
+    { width: 960, quality: 0.25 },
+    { width: 640, quality: 0.3 },
+    { width: 640, quality: 0.18 },
+    { width: MIN_IMAGE_WIDTH, quality: 0.2 },
+    { width: MIN_IMAGE_WIDTH, quality: 0.1 },
+  ];
+  const compressImage = async (uri: string, knownWidth?: number) => {
+    try {
+      // Document-picked images (e.g. a pasted screenshot) don't come with known dimensions like a
+      // camera/library asset does — render once un-resized just to read them off the ImageRef
+      // result. A camera/library asset already knows its width, so it skips straight past this.
+      let width = knownWidth;
+      let source: any = uri;
+      if (width === undefined) {
+        const probe = await ImageManipulator.manipulate(uri).renderAsync();
+        width = probe.width;
+        source = probe;
+      }
+
+      let best: { uri: string; base64?: string } | null = null;
+      let bestBytes = Infinity;
+      for (const step of COMPRESSION_STEPS) {
+        const targetWidth = Math.min(width, step.width); // never upscale past the original
+        const rendered = await ImageManipulator.manipulate(source).resize({ width: targetWidth }).renderAsync();
+        const saved = await rendered.saveAsync({ compress: step.quality, format: SaveFormat.JPEG, base64: true });
+        const approxBytes = saved.base64 ? Math.ceil((saved.base64.length * 3) / 4) : Infinity;
+        if (approxBytes < bestBytes) {
+          best = saved;
+          bestBytes = approxBytes;
+        }
+        if (approxBytes <= TARGET_FILE_BYTES) break;
+      }
+      return best;
+    } catch (e) {
+      console.warn("Failed to compress image, falling back to the original", e);
+      return null;
+    }
+  };
+
   // ---- photo & file capture for defects ----
   const launchPicker = async (mode: "camera" | "library" | "document", id: string) => {
     try {
@@ -218,22 +305,28 @@ const load = async () => {
           Alert.alert("Permission needed", "Camera access is required to capture defect photos.");
           return;
         }
-        const result = await ImagePicker.launchCameraAsync({ quality: 0.6, mediaTypes: ["images"], base64: true });
+        const result = await ImagePicker.launchCameraAsync({ quality: 0.7, mediaTypes: ["images"], base64: true });
         if (result.canceled || !result.assets?.length) return;
-        uri = result.assets[0].uri;
-        base64 = result.assets[0].base64 || undefined;
-        name = result.assets[0].fileName || "photo.jpg";
+        const asset = result.assets[0];
+        const compressed = await compressImage(asset.uri, asset.width);
+        uri = compressed?.uri || asset.uri;
+        base64 = compressed?.base64 || asset.base64 || undefined;
+        type = compressed ? "image/jpeg" : (asset.mimeType || "image/jpeg");
+        name = asset.fileName || "photo.jpg";
       } else if (mode === "library") {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
           Alert.alert("Permission needed", "Photo library access is required.");
           return;
         }
-        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ["images"], base64: true });
+        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, mediaTypes: ["images"], base64: true });
         if (result.canceled || !result.assets?.length) return;
-        uri = result.assets[0].uri;
-        base64 = result.assets[0].base64 || undefined;
-        name = result.assets[0].fileName || "photo.jpg";
+        const asset = result.assets[0];
+        const compressed = await compressImage(asset.uri, asset.width);
+        uri = compressed?.uri || asset.uri;
+        base64 = compressed?.base64 || asset.base64 || undefined;
+        type = compressed ? "image/jpeg" : (asset.mimeType || "image/jpeg");
+        name = asset.fileName || "photo.jpg";
       } else if (mode === "document") {
         const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
         if (result.canceled || !result.assets?.length) return;
@@ -242,27 +335,50 @@ const load = async () => {
         name = asset.name;
         type = asset.mimeType || "application/octet-stream";
 
-        // Read Base64
-        if (Platform.OS === 'web') {
-          try {
-            const res = await fetch(uri);
-            const blob = await res.blob();
-            base64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.readAsDataURL(blob);
-              reader.onloadend = () => {
-                const b64 = reader.result as string;
-                resolve(b64.split(",")[1]); // Strip data URL scheme
-              };
-            });
-          } catch (e) {
-            console.warn("Failed to convert file to base64 on web", e);
+        if (type.startsWith("image/")) {
+          // A screenshot or photo picked via the file browser (not the camera/library flow) can
+          // just as easily blow past the gateway's payload limit once base64-encoded — compress it
+          // the same way, just without a known width up front (compressImage probes it instead).
+          const compressed = await compressImage(uri);
+          if (compressed) {
+            uri = compressed.uri;
+            base64 = compressed.base64;
+            type = "image/jpeg";
           }
-        } else {
-          try {
-            base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-          } catch (e) {
-            console.warn("Failed to read file", e);
+        }
+
+        if (!base64) {
+          // Non-image files (PDFs etc.), or image compression failed above — read the raw bytes.
+          // Unlike photos, these can't be shrunk here, so warn early rather than let a large file
+          // fail the whole submission with a 413.
+          if (asset.size && asset.size > 5 * 1024 * 1024) {
+            Alert.alert(
+              "Large file",
+              "This file is over 5MB. Large attachments can cause the submission to fail — consider a smaller file if saving doesn't work."
+            );
+          }
+
+          if (Platform.OS === 'web') {
+            try {
+              const res = await fetch(uri);
+              const blob = await res.blob();
+              base64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = () => {
+                  const b64 = reader.result as string;
+                  resolve(b64.split(",")[1]); // Strip data URL scheme
+                };
+              });
+            } catch (e) {
+              console.warn("Failed to convert file to base64 on web", e);
+            }
+          } else {
+            try {
+              base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+            } catch (e) {
+              console.warn("Failed to read file", e);
+            }
           }
         }
       }
@@ -312,26 +428,58 @@ const load = async () => {
         DraftFlag: "X",
         CompletedFlag: " ",
         Matnr: activeMaterialCode,
-        ZmouldItemSet: data.map((item) => ({
-          //Matnr: activeMaterialCode,
-          Lifnr: activeVendorCode,
-          Name1: user?.vendorName,
-          ZsubDate: sapDate,
-          ZmouldCat: "02",
-          ZmouldCatIdH: "IM",
-          ZmouldHeadIdH: "H",
-          ZmouldColHead: "02",
-          ZmouldColId: code,
-          ZmouldColName: item.task.substring(0, 100),
-          ZmouldColVal1: (item.decision || " ").substring(0, 100),
-          ZmouldColVal2: (item.remarks || " ").substring(0, 100),
-          ZmouldColVal3: item.photos.length ? `${item.photos.length} attachment(s)` : " ",
-          // Attachments: item.photos.map(p => ({
-          //   name: p.name,
-          //   type: p.type,
-          //   base64: p.base64
-          // }))
-        })),
+        ZmouldItemSet: [
+          ...data.map((item) => ({
+            Lifnr: activeVendorCode,
+            Name1: user?.vendorName,
+            ZsubDate: sapDate,
+            ZmouldCat: "02",
+            ZmouldCatIdH: "IM",
+            ZmouldHeadIdH: "H",
+            ZmouldColHead: "02",
+            ZmouldColId: code,
+            ZmouldColName: item.task.substring(0, 100),
+            ZmouldColVal1: (item.decision || " ").substring(0, 100),
+            ZmouldColVal2: (item.remarks || " ").substring(0, 100),
+            ZmouldColVal3: item.photos.length ? `${item.photos.length} attachment(s)` : " ",
+            // ZinspId / ZinspItem / ZattchId are all generated server-side in
+            // CREATE_DEEP_ENTITY — do not send them. FileName here is the
+            // ORIGINAL upload name (used only to derive the extension); the
+            // server overwrites it with its own convention
+            // InspectionID_InspectionItem_AttachID_Defect.ext (Defect comes
+            // from this item's ZmouldColVal2/remarks, since ZmouldAttach has
+            // no defect field of its own) before persisting to AL11 and
+            // storing that final name back into FileName.
+            ZMoldAttachmentSet: (item.photos || []).map((p) => ({
+              Base: p.base64,                          // raw base64, NO "data:image/jpeg;base64," prefix
+              MimeType: p.type,                        // e.g. "image/jpeg", "application/pdf"
+              FileName: (p.name || "attachment").substring(0, 100),
+            })),
+          })),
+          // Mould master edits (Cavity & Core only) — no dedicated backend field exists yet, so these
+          // ride along as extra ZmouldItemSet rows keyed by name, same mechanism as checklist answers.
+          // Temporarily commented out — not sending these rows in the payload for now.
+          // ...(showMouldMasterData
+          //   ? [
+          //       { name: "Running Cavity", value: runningCavity },
+          //       { name: "Current Cycle Time", value: currentCycleTime },
+          //       { name: "Current Shots", value: currentShots },
+          //     ].map(({ name, value }) => ({
+          //       Lifnr: activeVendorCode,
+          //       Name1: user?.vendorName,
+          //       ZsubDate: sapDate,
+          //       ZmouldCat: "02",
+          //       ZmouldCatIdH: "IM",
+          //       ZmouldHeadIdH: "H",
+          //       ZmouldColHead: "02",
+          //       ZmouldColId: code,
+          //       ZmouldColName: name,
+          //       ZmouldColVal1: (value || " ").substring(0, 100),
+          //       ZmouldColVal2: " ",
+          //       ZmouldColVal3: " ",
+          //     }))
+          //   : []),
+        ],
       };
       
       // DEBUG: Alert to verify material code
@@ -361,24 +509,24 @@ const load = async () => {
  
   return (
 <View style={styles.root}>
-<StatusBar style="light" />      {/* HEADER */}
-<LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+<StatusBar style="dark" />      {/* HEADER */}
+<View style={[styles.header, { paddingTop: insets.top + 10 }]}>
 <View style={styles.headerRow}>
 <TouchableOpacity onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
-  <GlassChip size={40} tint="dark" style={styles.headerBtn}>
-    <Icons.List size={22} color="#fff" weight="bold" />
-  </GlassChip>
+  <View style={[styles.headerBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+    <Icons.List size={22} color={colors.textBody} weight="bold" />
+  </View>
 </TouchableOpacity>
-<GlassChip size={44} tint="dark" style={styles.headerIcon}>{icon ?? <Icons.ClipboardText size={22} color="#fff" weight="fill" />}</GlassChip>
+<View style={[styles.headerIcon, { backgroundColor: colors.brandSoft }]}>{icon ?? <Icons.ClipboardText size={22} color={colors.brand} weight="fill" />}</View>
 <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-  <GlassChip size={40} tint="dark" style={styles.headerBtn}>
-    <Icons.X size={20} color="#fff" weight="bold" />
-  </GlassChip>
+  <View style={[styles.headerBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+    <Icons.X size={20} color={colors.textBody} weight="bold" />
+  </View>
 </TouchableOpacity>
 </View>
 <Text style={styles.title}>{title}</Text>
         {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
- 
+
         {/* progress */}
 <View style={styles.progressWrap}>
 <View style={styles.progressTrack}>
@@ -386,7 +534,7 @@ const load = async () => {
 </View>
 <Text style={styles.progressText}>{answered}/{total}</Text>
 </View>
-</LinearGradient>
+</View>
  
       {/* STAT STRIP */}
 <View style={styles.stripWrap}>
@@ -403,6 +551,63 @@ const load = async () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 110 }}
 >
+        {showMouldMasterData && (
+          <View style={[styles.card, shadow.soft, { backgroundColor: colors.surface, marginBottom: 16 }]}>
+            <Text style={styles.masterCardTitle}>Mould Master Data</Text>
+            <View style={styles.masterGrid}>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Number of Cavity</Text>
+                <Text style={styles.masterValue}>{mouldMaster.numberOfCavity || "—"}</Text>
+              </View>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Running Cavity</Text>
+                <TextInput
+                  style={styles.masterInput}
+                  keyboardType="numeric"
+                  value={runningCavity}
+                  onChangeText={setRunningCavity}
+                  placeholder="Enter running cavity"
+                  placeholderTextColor={colors.textFaint}
+                />
+              </View>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Mould Life (Years)</Text>
+                <Text style={styles.masterValue}>{mouldMaster.mouldLife || "—"}</Text>
+              </View>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Cycle Time (sec)</Text>
+                <Text style={styles.masterValue}>{mouldMaster.cycleTime || "—"}</Text>
+              </View>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Current Cycle Time (sec)</Text>
+                <TextInput
+                  style={styles.masterInput}
+                  keyboardType="numeric"
+                  value={currentCycleTime}
+                  onChangeText={setCurrentCycleTime}
+                  placeholder="Enter current cycle time"
+                  placeholderTextColor={colors.textFaint}
+                />
+              </View>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Total Shots (Million)</Text>
+                <Text style={styles.masterValue}>{mouldMaster.mouldShots || "—"}</Text>
+              </View>
+              <View style={styles.masterItem}>
+                <Text style={styles.masterLabel}>Current Shots (Million)</Text>
+                <TextInput
+                  style={styles.masterInput}
+                  keyboardType="numeric"
+                  value={currentShots}
+                  onChangeText={setCurrentShots}
+                  placeholder="Enter current shots"
+                  placeholderTextColor={colors.textFaint}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
         {data.length === 0 ? (
 <EmptyState title="No checklist items" message="This module has no inspection points to fill." />
         ) : (
@@ -461,7 +666,7 @@ const load = async () => {
                           {photo.type && photo.type.startsWith('image/') ? (
                             <Image source={{ uri: photo.uri }} style={styles.thumb} />
                           ) : (
-                            <View style={[styles.thumb, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                            <View style={[styles.thumb, { backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
                               <Icons.FilePdf size={24} color={colors.danger} />
                               <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 4, paddingHorizontal: 2, textAlign: 'center' }} numberOfLines={2}>{photo.name}</Text>
                             </View>
@@ -529,18 +734,19 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingBottom: 18,
-    borderBottomLeftRadius: 26,
-    borderBottomRightRadius: 26,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerBtn: { width: 40, height: 40, borderRadius: 13 },
-  headerIcon: { width: 44, height: 44, borderRadius: 14 },
-  title: { color: "#fff", fontSize: font.h3, fontWeight: font.black, marginTop: 14, letterSpacing: -0.3 },
-  subtitle: { color: "rgba(255,255,255,0.88)", fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
+  headerBtn: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  headerIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  title: { color: colors.ink, fontSize: font.h3, fontWeight: font.black, marginTop: 14, letterSpacing: -0.3 },
+  subtitle: { color: colors.textMuted, fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
   progressWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 },
-  progressTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.28)", overflow: "hidden" },
-  progressFill: { height: 8, borderRadius: 999, backgroundColor: "#fff" },
-  progressText: { color: "#fff", fontSize: font.caption, fontWeight: font.bold },
+  progressTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: colors.border, overflow: "hidden" },
+  progressFill: { height: 8, borderRadius: 999, backgroundColor: colors.brand },
+  progressText: { color: colors.ink, fontSize: font.caption, fontWeight: font.bold },
  
   stripWrap: { paddingHorizontal: 16, marginTop: -14 },
   strip: {
@@ -567,6 +773,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+
+  masterCardTitle: { fontSize: font.body, fontWeight: font.black, color: colors.ink, marginBottom: 12 },
+  masterGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  masterItem: { width: "47%" },
+  masterLabel: { fontSize: font.micro, color: colors.textFaint, fontWeight: font.semibold, textTransform: "uppercase", marginBottom: 4 },
+  masterValue: { fontSize: font.body, fontWeight: font.bold, color: colors.ink },
+  masterInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius._12,
+    paddingHorizontal: 10,
+    height: 38,
+    fontSize: font.sub,
+    fontWeight: font.medium,
+    color: colors.ink,
+  },
   taskNo: {
     width: 24,
     height: 24,

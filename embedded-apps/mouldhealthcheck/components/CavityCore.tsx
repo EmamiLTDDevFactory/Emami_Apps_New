@@ -9,6 +9,7 @@ export default function CavityCore() {
       title="Cavity & Core"
       subtitle="Cavity & core condition check points"
       icon={<Icons.Cube size={22} color="#fff" weight="fill" />}
+      showMouldMasterData
     />
   );
 }

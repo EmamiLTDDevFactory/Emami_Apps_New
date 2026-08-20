@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,10 +16,14 @@ import * as Icons from "phosphor-react-native";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, FadeInRight, Layout } from "react-native-reanimated";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useGlobalSearchParams } from "expo-router";
+
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/config";
+import { useInspection } from "@/lib/inspectionStore";
 
 import SidePane from "./SidePane";
 import { colors, font, radius, gradients, shadow } from "@/constants/theme";
-import GlassChip from "@/components/ui/GlassChip";
 
 type Task = {
   id: string;
@@ -34,8 +39,62 @@ const PRIORITY_TINT: Record<string, string> = { Low: colors.success, Medium: col
 export default function PreventiveMaint() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const searchParams = useGlobalSearchParams();
+  const { user } = useAuth();
+  const { activeCode } = useInspection();
+
+  const materialCode = (searchParams.materialCode || searchParams.Matnr || searchParams.matnr) as string;
+  const vendorCode = (searchParams.vendorCode || searchParams.Lifnr || searchParams.lifnr) as string;
+
+  const activeMaterialCode = materialCode || activeCode || user?.matnr;
+  const activeVendorCode = vendorCode || user?.vendorCode || user?.Vendor;
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    loadDrafts();
+  }, [activeMaterialCode, activeVendorCode]);
+
+  const loadDrafts = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/ZMM_MOULD_CARE_SRV/ZMouldGetDataSet", {
+        params: { $filter: `Matnr eq '${activeMaterialCode}' and Lifnr eq '${activeVendorCode}'`, $format: "json" }
+      });
+      const rawSavedData = data?.d?.results || [];
+      const savedTasks: Task[] = [];
+      rawSavedData.forEach((savedItem: any) => {
+        if (savedItem.ZmouldColId === "PM") {
+          const isYes = savedItem.ZmouldColVal2?.trim() === "Yes";
+          const val3 = savedItem.ZmouldColVal3?.trim();
+          let parsedDate = new Date();
+          if (!isYes && val3) {
+            const d = new Date(val3);
+            if (!isNaN(d.getTime())) parsedDate = d;
+          }
+
+          savedTasks.push({
+            id: Date.now().toString() + Math.random(),
+            description: savedItem.ZmouldColVal1?.trim() || "",
+            isCompleted: savedItem.ZmouldColVal2?.trim() || "",
+            priority: isYes ? val3 : "",
+            dueDate: parsedDate,
+            showDatePicker: false
+          });
+        }
+      });
+      if (savedTasks.length > 0) {
+        setTasks(savedTasks);
+      }
+    } catch (e) {
+      console.log("Failed to load PM drafts", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const addTask = () => {
     Haptics.selectionAsync();
@@ -45,60 +104,103 @@ export default function PreventiveMaint() {
     setTasks((p) => p.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   const remove = (id: string) => setTasks((p) => p.filter((t) => t.id !== id));
 
-  const submit = (isDraft: boolean) => {
+  const submit = async () => {
     if (tasks.length === 0) {
       Alert.alert("Empty", "Please add at least one task.");
       return;
     }
-    if (!isDraft) {
-      const incomplete = tasks.some((t) => !t.description || !t.isCompleted || (t.isCompleted === "Yes" && !t.priority));
-      if (incomplete) {
-        Alert.alert("Incomplete", "Please fill all required fields in each task.");
-        return;
+
+    const sapDate = "/Date(" + Date.now() + ")/";
+    const payload = {
+      Lifnr: activeVendorCode,
+      Name1: user?.vendorName,
+      ZsubDate: sapDate,
+      CreatedBy: user?.Email,
+      CreatedOn: sapDate,
+      ChangedBy: user?.Email,
+      ChangedOn: sapDate,
+      DraftFlag: "X",
+      CompletedFlag: " ",
+      Matnr: activeMaterialCode,
+      ZmouldItemSet: tasks.map((task) => ({
+        Lifnr: activeVendorCode,
+        Name1: user?.vendorName,
+        ZsubDate: sapDate,
+        ZmouldCat: "02",
+        ZmouldCatIdH: "IM",
+        ZmouldHeadIdH: "H",
+        ZmouldColHead: "02",
+        ZmouldColId: "PM",
+        ZmouldColName: "Preventive Maintenance",
+        ZmouldColVal1: (task.description || " ").substring(0, 100),
+        ZmouldColVal2: (task.isCompleted || " ").substring(0, 100),
+        ZmouldColVal3: (task.isCompleted === "Yes" ? task.priority : task.dueDate.toLocaleDateString()).substring(0, 100),
+      })),
+    };
+
+    try {
+      setSubmitting(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const res = await api.post("/ZMM_MOULD_CARE_SRV/ZMouldDataHeaderSet", payload);
+      if (res.status === 200 || res.status === 201) {
+        Alert.alert("Draft saved", "Task progress stored successfully.");
+      } else {
+        Alert.alert("Error", "Failed to save draft. Please try again.");
       }
+    } catch (e: any) {
+      const serverError = e.response?.data?.error || e.response?.data || e.message;
+      const msg = typeof serverError === "object" ? JSON.stringify(serverError) : serverError;
+      Alert.alert("Save failed", `Server returned an error:\n\n${msg}`);
+    } finally {
+      setSubmitting(false);
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(isDraft ? "Draft saved" : "Submitted", isDraft ? "Task progress stored locally." : "Maintenance plan submitted successfully.");
   };
 
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
 
-      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
-            <GlassChip size={40} tint="dark" style={styles.headerBtn}>
-              <Icons.List size={22} color="#fff" weight="bold" />
-            </GlassChip>
+            <View style={[styles.headerBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+              <Icons.List size={22} color={colors.textBody} weight="bold" />
+            </View>
           </TouchableOpacity>
-          <GlassChip size={44} tint="dark" style={styles.headerIcon}>
-            <Icons.Wrench size={22} color="#fff" weight="fill" />
-          </GlassChip>
+          <View style={[styles.headerIcon, { backgroundColor: colors.brandSoft }]}>
+            <Icons.Wrench size={22} color={colors.brand} weight="fill" />
+          </View>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <GlassChip size={40} tint="dark" style={styles.headerBtn}>
-              <Icons.X size={20} color="#fff" weight="bold" />
-            </GlassChip>
+            <View style={[styles.headerBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+              <Icons.X size={20} color={colors.textBody} weight="bold" />
+            </View>
           </TouchableOpacity>
         </View>
         <Text style={styles.title}>Preventive Maintenance</Text>
         <Text style={styles.subtitle}>Required or not — schedule tasks</Text>
-      </LinearGradient>
+      </View>
 
       <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 110 }}>
-        <TouchableOpacity activeOpacity={0.9} onPress={addTask}>
-          <View style={styles.addBtn}>
-            <Icons.Plus size={20} color={colors.brand} weight="bold" />
-            <Text style={styles.addBtnText}>Add maintenance task</Text>
-          </View>
-        </TouchableOpacity>
-
-        {tasks.length === 0 ? (
-          <View style={styles.empty}>
-            <Icons.Wrench size={48} color={colors.textFaint} weight="duotone" />
-            <Text style={styles.emptyText}>No tasks yet. Add a maintenance task to begin.</Text>
+        {loading ? (
+          <View style={{ alignItems: 'center', marginTop: 40, gap: 12 }}>
+            <ActivityIndicator size="large" color={colors.brand} />
+            <Text style={{ color: colors.textMuted, fontWeight: font.medium }}>Loading drafts...</Text>
           </View>
         ) : (
+          <>
+            <TouchableOpacity activeOpacity={0.9} onPress={addTask}>
+              <View style={styles.addBtn}>
+                <Icons.Plus size={20} color={colors.brand} weight="bold" />
+                <Text style={styles.addBtnText}>Add maintenance task</Text>
+              </View>
+            </TouchableOpacity>
+
+            {tasks.length === 0 ? (
+              <View style={styles.empty}>
+                <Icons.Wrench size={48} color={colors.textFaint} weight="duotone" />
+                <Text style={styles.emptyText}>No tasks yet. Add a maintenance task to begin.</Text>
+              </View>
+            ) : (
           tasks.map((task, index) => {
             const canChoose = task.description.trim().length > 0;
             const isYes = task.isCompleted === "Yes";
@@ -177,17 +279,15 @@ export default function PreventiveMaint() {
             );
           })
         )}
+        </>
+        )}
       </Animated.ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <TouchableOpacity style={styles.draftBtn} activeOpacity={0.85} onPress={() => submit(true)}>
-          <Icons.FloppyDisk size={19} color={colors.textBody} weight="duotone" />
-          <Text style={styles.draftText}>Draft</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.9} onPress={() => submit(false)}>
-          <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtn}>
-            <Icons.Check size={19} color="#fff" weight="bold" />
-            <Text style={styles.saveText}>Finalize Plan</Text>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.85} onPress={submit} disabled={submitting}>
+          <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.draftBtn}>
+            <Icons.FloppyDisk size={19} color="#fff" weight="bold" />
+            <Text style={styles.draftTextSubmit}>Save Draft</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -199,12 +299,12 @@ export default function PreventiveMaint() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 16, paddingBottom: 18, borderBottomLeftRadius: 26, borderBottomRightRadius: 26 },
+  header: { paddingHorizontal: 16, paddingBottom: 18, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerBtn: { width: 40, height: 40, borderRadius: 13 },
-  headerIcon: { width: 44, height: 44, borderRadius: 14 },
-  title: { color: "#fff", fontSize: font.h3, fontWeight: font.black, marginTop: 14 },
-  subtitle: { color: "rgba(255,255,255,0.88)", fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
+  headerBtn: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  headerIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  title: { color: colors.ink, fontSize: font.h3, fontWeight: font.black, marginTop: 14 },
+  subtitle: { color: colors.textMuted, fontSize: font.sub, fontWeight: font.medium, marginTop: 4 },
 
   addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1.5, borderColor: colors.brandSoft2, height: 52, borderRadius: radius._17 },
   addBtnText: { color: colors.brand, fontWeight: font.bold, fontSize: font.body },
@@ -232,8 +332,6 @@ const styles = StyleSheet.create({
   dateText: { fontSize: font.body, fontWeight: font.bold, color: colors.ink },
 
   bottomBar: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingTop: 14, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-  draftBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, height: 52, borderRadius: radius._17, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
-  draftText: { color: colors.textBody, fontWeight: font.bold, fontSize: font.body },
-  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: radius._17 },
-  saveText: { color: "#fff", fontWeight: font.bold, fontSize: font.body },
+  draftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: radius._17 },
+  draftTextSubmit: { color: "#fff", fontWeight: font.bold, fontSize: font.body },
 });
