@@ -6,6 +6,7 @@ frontend:
         - npm ci
     build:
       commands:
+        - echo "EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL" > embedded-apps/non-ctc-expense/.env
         - npm run build:web
         - npm run build:embedded
   artifacts:
