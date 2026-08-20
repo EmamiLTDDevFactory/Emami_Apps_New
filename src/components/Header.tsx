@@ -7,7 +7,10 @@ import { NOTIFICATIONS, CURRENT_USER, unreadNotificationsCount } from '../data/m
 import { useNotificationsUI } from '../context/NotificationsUIContext';
 import { useIsWideScreen } from '../hooks/useIsWideScreen';
 import { usePwaInstall } from '../hooks/usePwaInstall';
+import { useTypewriterPlaceholder } from '../hooks/useTypewriterPlaceholder';
 import Avatar from './Avatar';
+
+const SEARCH_EXAMPLES = ['Dispatch Tracker', 'RC Portal', 'Non CTC Expense', 'MoldHealthCheck'];
 
 interface HeaderProps {
   searchValue: string;
@@ -35,6 +38,9 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
     setInstallOpen(true);
   };
 
+  const showAnimatedPlaceholder = !searchValue && !searchFocused;
+  const animatedExample = useTypewriterPlaceholder(SEARCH_EXAMPLES, showAnimatedPlaceholder);
+
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + 10 }]}>
       <View style={styles.row}>
@@ -58,7 +64,7 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
               onChangeText={onSearchChange}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              placeholder="Search anything…"
+              placeholder={showAnimatedPlaceholder && animatedExample ? `Search: ${animatedExample}` : 'Search anything…'}
               placeholderTextColor={colors.inkSoft}
               style={styles.searchInput}
               accessibilityLabel="Search applications"
