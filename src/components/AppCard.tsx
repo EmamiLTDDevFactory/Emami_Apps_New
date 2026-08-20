@@ -1,9 +1,8 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, AccessibilityInfo, Platform } from 'react-native';
 import { Star } from 'lucide-react-native';
 import type { AppItem } from '../types';
-import { colors, fonts, radii, appColor } from '../theme/tokens';
+import { colors, fonts, radii, appColor, motion, focusRingWeb } from '../theme/tokens';
 
 interface AppCardProps {
   app: AppItem;
@@ -13,31 +12,79 @@ interface AppCardProps {
   onToggleFavorite: (id: string) => void;
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export default function AppCard({ app, isFavorite, isTopUsed, onPress, onToggleFavorite }: AppCardProps) {
   const Icon = app.icon;
   const accent = appColor(app.id);
 
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const scale = useRef(new Animated.Value(1)).current;
+  const shadowOpacity = useRef(new Animated.Value(0.1)).current;
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => mounted && setReduceMotion(v));
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
+
+  const animate = (toScale: number, toShadow: number) => {
+    if (reduceMotion) {
+      scale.setValue(toScale);
+      shadowOpacity.setValue(toShadow);
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(scale, { toValue: toScale, duration: motion.duration.fast, easing: motion.easing.standard, useNativeDriver: true }),
+      Animated.timing(shadowOpacity, { toValue: toShadow, duration: motion.duration.fast, easing: motion.easing.standard, useNativeDriver: false }),
+    ]).start();
+  };
+
+  // react-native-web-only hover feedback; no-op props on native.
+  const webHoverProps =
+    Platform.OS === 'web'
+      ? ({
+          onHoverIn: () => {
+            setHovered(true);
+            animate(motion.hoverScale, 0.14);
+          },
+          onHoverOut: () => {
+            setHovered(false);
+            animate(1, 0.1);
+          },
+        } as any)
+      : {};
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={() => onPress(app)}
-      style={({ pressed }) => [
-        styles.card,
-        { shadowColor: accent, shadowOpacity: pressed ? 0.18 : 0.1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-      ]}
+      onPressIn={() => animate(motion.pressScale, 0.18)}
+      onPressOut={() => animate(hovered ? motion.hoverScale : 1, hovered ? 0.14 : 0.1)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      {...webHoverProps}
+      style={[styles.card, { shadowColor: accent, shadowOpacity, transform: [{ scale }] }, focused && focusRingWeb]}
       android_ripple={{ color: `${accent}14` }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${app.name}`}
     >
       <View style={styles.headerRow}>
-        <View style={[styles.iconBoxShadow, { shadowColor: accent }]}>
-          <LinearGradient
-            colors={[`${accent}33`, `${accent}12`]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconBox}
-          >
-            <Icon size={19} color={accent} strokeWidth={2.1} />
-          </LinearGradient>
+        <View style={[styles.iconBox, { backgroundColor: `${accent}1f` }]}>
+          <Icon size={19} color={accent} strokeWidth={2.1} />
         </View>
-        <Pressable hitSlop={10} onPress={() => onToggleFavorite(app.id)} style={styles.favBtn}>
+        <Pressable
+          hitSlop={10}
+          onPress={() => onToggleFavorite(app.id)}
+          style={styles.favBtn}
+          accessibilityRole="button"
+          accessibilityLabel={isFavorite ? `Remove ${app.name} from favorites` : `Add ${app.name} to favorites`}
+        >
           <Star size={16} color={isFavorite ? colors.amber : colors.border} fill={isFavorite ? colors.amber : 'transparent'} strokeWidth={1.8} />
         </Pressable>
       </View>
@@ -51,7 +98,7 @@ export default function AppCard({ app, isFavorite, isTopUsed, onPress, onToggleF
       )}
 
       <Text style={styles.desc} numberOfLines={2}>{app.desc}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -72,13 +119,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-  },
-  iconBoxShadow: {
-    borderRadius: radii.md,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
   },
   iconBox: {
     width: 40,

@@ -30,8 +30,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <DashboardHero
           name={CURRENT_USER.name.split(' ')[0]}
-          searchValue={query}
-          onSearchChange={setQuery}
+          lastLogin={CURRENT_USER.lastLogin}
         />
 
         <View style={styles.sectionHeader}>

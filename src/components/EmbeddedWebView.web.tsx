@@ -48,11 +48,11 @@ export default function EmbeddedWebView({ url, appName }: EmbeddedWebViewProps) 
         <Text style={styles.errorSubtitle}>
           This app may not allow being embedded. Try opening it directly instead.
         </Text>
-        <Pressable style={styles.retryBtn} onPress={openExternally}>
+        <Pressable style={styles.retryBtn} onPress={openExternally} hitSlop={8}>
           <ExternalLink size={15} color={colors.white} />
           <Text style={styles.retryText}>Open in new tab</Text>
         </Pressable>
-        <Pressable style={styles.retryBtnGhost} onPress={retry}>
+        <Pressable style={styles.retryBtnGhost} onPress={retry} hitSlop={8}>
           <RotateCw size={14} color={colors.inkSoft} />
           <Text style={styles.retryGhostText}>Try again</Text>
         </Pressable>
@@ -84,7 +84,7 @@ export default function EmbeddedWebView({ url, appName }: EmbeddedWebViewProps) 
           key: reloadKey,
           src: url,
           title: appName,
-          style: { border: 0, width: '100%', height: '100%', backgroundColor: colors.cream2 },
+          style: { border: 0, width: '100%', height: '100%', backgroundColor: colors.appBg },
           onLoad: () => setLoading(false),
           onError: () => setBlocked(true),
         })}
@@ -100,7 +100,7 @@ export default function EmbeddedWebView({ url, appName }: EmbeddedWebViewProps) 
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.cream2 },
+  flex: { flex: 1, backgroundColor: colors.appBg },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cream2,
+    backgroundColor: colors.appBg,
     gap: 10,
   },
   loadingText: {
@@ -171,12 +171,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
-    backgroundColor: colors.cream2,
+    backgroundColor: colors.appBg,
   },
   errorIcon: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: radii.pill,
     backgroundColor: `${colors.rust}17`,
     alignItems: 'center',
     justifyContent: 'center',

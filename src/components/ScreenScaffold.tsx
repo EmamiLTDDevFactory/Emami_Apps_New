@@ -32,7 +32,7 @@ export default function ScreenScaffold({ searchValue, onSearchChange, children }
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.cream2,
+    backgroundColor: colors.appBg,
   },
   body: {
     flex: 1,

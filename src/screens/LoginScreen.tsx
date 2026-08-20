@@ -41,6 +41,24 @@ const msStyles = StyleSheet.create({
 
 const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as const;
 
+// Purely decorative accents for this screen only — Login intentionally
+// breaks from the brand palette here (same as APPS_GRADIENT above), so
+// these stay local rather than being promoted into theme/tokens.ts.
+const LOGIN_ACCENTS = {
+  blobTop: '#F7B9A0',
+  blobBottom: '#A9C9F5',
+  blobMid: '#F5C9E0',
+  haloRingOuter: 'rgba(31,27,51,0.12)',
+  haloRingInner: 'rgba(31,27,51,0.1)',
+  haloDotBlue: '#2563EB',
+  haloDotPink: '#DB2777',
+  taglineAccent: '#0D9488',
+} as const;
+
+// One-off hero-card radius (bigger than any step in the shared `radii`
+// scale) — not a missing token, just this card's specific treatment.
+const CARD_RADIUS = radii.xxxl + 6;
+
 function AppsWordmark() {
   // react-native-web doesn't actually mask with @react-native-masked-view —
   // it silently falls back to rendering the opaque mask text, which is why
@@ -158,21 +176,21 @@ const styles = StyleSheet.create({
   blobTop: {
     width: 420,
     height: 420,
-    backgroundColor: '#F7B9A0',
+    backgroundColor: LOGIN_ACCENTS.blobTop,
     top: -200,
     right: -160,
   },
   blobBottom: {
     width: 360,
     height: 360,
-    backgroundColor: '#A9C9F5',
+    backgroundColor: LOGIN_ACCENTS.blobBottom,
     bottom: -160,
     left: -130,
   },
   blobMid: {
     width: 300,
     height: 300,
-    backgroundColor: '#F5C9E0',
+    backgroundColor: LOGIN_ACCENTS.blobMid,
     top: 100,
     left: -130,
     opacity: 0.16,
@@ -204,12 +222,12 @@ const styles = StyleSheet.create({
   haloRingOuter: {
     width: 190,
     height: 190,
-    borderColor: 'rgba(31,27,51,0.12)',
+    borderColor: LOGIN_ACCENTS.haloRingOuter,
   },
   haloRingInner: {
     width: 142,
     height: 142,
-    borderColor: 'rgba(31,27,51,0.1)',
+    borderColor: LOGIN_ACCENTS.haloRingInner,
   },
   haloDot: {
     position: 'absolute',
@@ -218,12 +236,12 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   haloDotBlue: {
-    backgroundColor: '#2563EB',
+    backgroundColor: LOGIN_ACCENTS.haloDotBlue,
     top: 24,
     left: 18,
   },
   haloDotPink: {
-    backgroundColor: '#DB2777',
+    backgroundColor: LOGIN_ACCENTS.haloDotPink,
     top: 24,
     right: 18,
   },
@@ -258,7 +276,7 @@ const styles = StyleSheet.create({
   },
   taglineAccent: {
     fontFamily: fonts.sansBold,
-    color: '#0D9488',
+    color: LOGIN_ACCENTS.taglineAccent,
   },
   badgePill: {
     flexDirection: 'row',
@@ -280,7 +298,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     backgroundColor: colors.white,
-    borderRadius: radii.xxxl + 6,
+    borderRadius: CARD_RADIUS,
     paddingVertical: 32,
     paddingHorizontal: 28,
     alignItems: 'center',

@@ -4,6 +4,7 @@ import type { AppItem } from '../types';
 import AppCard from './AppCard';
 import EmptyState from './EmptyState';
 import { topUsedAppId } from '../data/mockData';
+import { useColumnCount } from '../hooks/useColumnCount';
 
 interface AppGridProps {
   apps: AppItem[];
@@ -16,11 +17,13 @@ interface AppGridProps {
 }
 
 export default function AppGrid({ apps, favorites, query, onOpenApp, onToggleFavorite, ListHeaderComponent, scrollEnabled = true }: AppGridProps) {
+  const numColumns = useColumnCount();
   return (
     <FlatList
+      key={`cols-${numColumns}`}
       data={apps}
       keyExtractor={(item) => item.id}
-      numColumns={2}
+      numColumns={numColumns}
       columnWrapperStyle={styles.row}
       contentContainerStyle={styles.content}
       ListHeaderComponent={ListHeaderComponent}

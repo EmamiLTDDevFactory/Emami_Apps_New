@@ -82,7 +82,7 @@ export default function AppDetailScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.cream2 },
+  flex: { flex: 1, backgroundColor: colors.appBg },
   flex1: { flex: 1 },
   hero: {
     flexDirection: 'row',
@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.appBg,
   },
   notFoundText: {
     color: colors.inkSoft,

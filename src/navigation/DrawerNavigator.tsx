@@ -22,9 +22,9 @@ export default function DrawerNavigator() {
         drawerType: isWideScreen ? 'permanent' : 'front',
         drawerStyle: {
           width: 260,
-          backgroundColor: colors.white,
+          backgroundColor: colors.sidebar,
           borderRightWidth: isWideScreen ? 1 : 0,
-          borderRightColor: colors.border,
+          borderRightColor: colors.sidebarBorder,
         },
         overlayColor: 'rgba(31,27,51,0.35)',
         swipeEdgeWidth: 40,

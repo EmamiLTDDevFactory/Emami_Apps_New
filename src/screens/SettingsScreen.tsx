@@ -4,9 +4,10 @@ import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Camera, Clock3, LogOut } from 'lucide-react-native';
 import ScreenScaffold from '../components/ScreenScaffold';
 import Avatar from '../components/Avatar';
+import Badge from '../components/Badge';
 import { useAuth } from '../context/AuthContext';
 import { CURRENT_USER, ACTIVITY_STATS } from '../data/mockData';
-import { colors, fonts, radii } from '../theme/tokens';
+import { colors, fonts, radii, categoryColors } from '../theme/tokens';
 
 const STATS = [
   { label: 'Logins', value: ACTIVITY_STATS.logins },
@@ -39,7 +40,7 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.baseCard, styles.card]}>
           <View style={styles.identityRow}>
             <View style={styles.avatarCol}>
               <View style={styles.avatarRow}>
@@ -55,9 +56,7 @@ export default function SettingsScreen() {
             <View style={styles.infoCol}>
               <View style={styles.nameRow}>
                 <Text style={styles.name}>{CURRENT_USER.name}</Text>
-                <View style={styles.roleBadge}>
-                  <Text style={styles.roleBadgeText}>{CURRENT_USER.role}</Text>
-                </View>
+                <Badge label={CURRENT_USER.role} color={colors.amber} />
               </View>
               <Text style={styles.meta}>{CURRENT_USER.mobile}</Text>
               <Text style={styles.meta}>{CURRENT_USER.email}</Text>
@@ -86,7 +85,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={styles.timeCard}>
+        <View style={[styles.baseCard, styles.timeCard]}>
           <View style={styles.timeIconBox}>
             <Clock3 size={15} color={colors.white} />
           </View>
@@ -96,12 +95,10 @@ export default function SettingsScreen() {
               This is your first session — keep going, your time will land here next visit.
             </Text>
           </View>
-          <View style={styles.sessionPill}>
-            <Text style={styles.sessionPillText}>{ACTIVITY_STATS.sessionsTotal} session total</Text>
-          </View>
+          <Badge label={`${ACTIVITY_STATS.sessionsTotal} session total`} color={colors.inkSoft} />
         </View>
 
-        <View style={styles.activityCard}>
+        <View style={[styles.baseCard, styles.activityCard]}>
           <Text style={styles.activityTitle}>ACTIVITY</Text>
           <View style={styles.statsGrid}>
             {STATS.map((s) => (
@@ -163,11 +160,13 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansSemiBold,
     color: colors.rust,
   },
-  card: {
+  baseCard: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.xl,
     backgroundColor: colors.white,
+  },
+  card: {
     padding: 20,
     marginBottom: 16,
   },
@@ -193,7 +192,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: colors.cream2,
+    backgroundColor: colors.appBg,
   },
   uploadText: {
     fontSize: 11,
@@ -220,17 +219,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: fonts.sansBold,
     color: colors.ink,
-  },
-  roleBadge: {
-    backgroundColor: `${colors.amber}22`,
-    borderRadius: radii.pill,
-    paddingHorizontal: 9,
-    paddingVertical: 2,
-  },
-  roleBadgeText: {
-    fontSize: 10,
-    fontFamily: fonts.sansBold,
-    color: '#B45309',
   },
   meta: {
     fontSize: 12.5,
@@ -268,12 +256,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
-    borderRadius: radii.xl,
+    borderLeftColor: categoryColors.Operations,
     padding: 16,
     marginBottom: 16,
   },
@@ -281,7 +265,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radii.md,
-    backgroundColor: '#0D9488',
+    backgroundColor: categoryColors.Operations,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -297,22 +281,7 @@ const styles = StyleSheet.create({
     color: colors.inkSoft,
     marginTop: 3,
   },
-  sessionPill: {
-    backgroundColor: colors.cream2,
-    borderRadius: radii.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  sessionPillText: {
-    fontSize: 10.5,
-    fontFamily: fonts.sansSemiBold,
-    color: colors.inkSoft,
-  },
   activityCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.xl,
-    backgroundColor: colors.white,
     padding: 20,
   },
   activityTitle: {
@@ -333,7 +302,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.lg,
-    backgroundColor: colors.cream2,
+    backgroundColor: colors.appBg,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },

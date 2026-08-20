@@ -2,21 +2,10 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { DrawerContentComponentProps } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, fonts, radii, appColor, gradients } from '../theme/tokens';
+import { colors, fonts, radii, appColor, shadows } from '../theme/tokens';
 import { NAV, APPS } from '../data/mockData';
 import { useFavorites } from '../context/FavoritesContext';
 import EmpAppMark from '../components/EmpAppMark';
-
-const NAV_COLORS: Record<string, string> = {
-  Home: colors.rust,
-  MyApplications: '#2563EB',
-  Favorites: '#F59E0B',
-  Recent: '#0D9488',
-  AllApplications: '#7C3AED',
-  Help: '#DB2777',
-  Settings: '#6B7280',
-};
 
 export default function CustomDrawerContent({ state, navigation }: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
@@ -44,10 +33,9 @@ export default function CustomDrawerContent({ state, navigation }: DrawerContent
                 <Pressable
                   key={app.id}
                   onPress={() => onOpenApp(app)}
-                  style={[
-                    styles.quickAccessBtn,
-                    { backgroundColor: `${c}1a`, shadowColor: c },
-                  ]}
+                  style={[styles.quickAccessBtn, { backgroundColor: `${c}2e` }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${app.name}`}
                 >
                   <Icon size={14} color={c} />
                 </Pressable>
@@ -61,29 +49,21 @@ export default function CustomDrawerContent({ state, navigation }: DrawerContent
         {NAV.map((item) => {
           const active = activeRoute === item.id;
           const Icon = item.icon;
-          const itemColor = NAV_COLORS[item.id] ?? colors.rust;
           return (
             <Pressable
               key={item.id}
               onPress={() => navigation.navigate(item.id)}
-              style={[styles.navItemShadow, active && styles.navItemActiveShadow]}
+              style={[styles.navItem, active && styles.navItemActive]}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityState={{ selected: active }}
             >
-              <View style={styles.navItem}>
-                {active && (
-                  <LinearGradient
-                    colors={gradients.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.gradientFill}
-                  />
-                )}
-                <View style={[styles.navIconBox, { backgroundColor: active ? 'rgba(255,255,255,0.2)' : `${itemColor}16` }]}>
-                  <Icon size={15} color={active ? colors.white : itemColor} strokeWidth={2.2} />
-                </View>
-                <Text style={[styles.navLabel, { color: active ? colors.white : colors.ink, fontFamily: active ? fonts.sansBold : fonts.sansMedium }]}>
-                  {item.label}
-                </Text>
+              <View style={[styles.navIconBox, active && styles.navIconBoxActive]}>
+                <Icon size={15} color={active ? colors.white : colors.sidebarTextSoft} strokeWidth={2.2} />
               </View>
+              <Text style={[styles.navLabel, { color: active ? colors.white : colors.sidebarTextSoft, fontFamily: active ? fonts.sansBold : fonts.sansMedium }]}>
+                {item.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -99,7 +79,7 @@ export default function CustomDrawerContent({ state, navigation }: DrawerContent
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.sidebar,
   },
   brandRow: {
     flexDirection: 'row',
@@ -109,7 +89,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   brandText: {
-    color: colors.ink,
+    color: colors.sidebarText,
     fontFamily: fonts.sansBold,
     fontSize: 14,
     letterSpacing: 0.3,
@@ -119,11 +99,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.sidebarBorder,
     marginBottom: 8,
   },
   quickAccessLabel: {
-    color: colors.inkSoft,
+    color: colors.sidebarTextSoft,
     fontSize: 10.5,
     fontFamily: fonts.sansBold,
     letterSpacing: 0.8,
@@ -138,28 +118,15 @@ const styles = StyleSheet.create({
   quickAccessBtn: {
     width: 30,
     height: 30,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.sm,
     shadowOpacity: 0.25,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   nav: {
     flex: 1,
     paddingHorizontal: 12,
-  },
-  navItemShadow: {
-    borderRadius: radii.lg,
-    marginBottom: 4,
-  },
-  navItemActiveShadow: {
-    shadowColor: colors.rust,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
   navItem: {
     flexDirection: 'row',
@@ -167,16 +134,14 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 8,
     paddingHorizontal: 8,
+    marginBottom: 4,
     borderRadius: radii.lg,
-    overflow: 'hidden',
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
   },
-  gradientFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: radii.lg,
+  navItemActive: {
+    backgroundColor: colors.sidebarActive,
+    borderLeftColor: colors.rust,
   },
   navIconBox: {
     width: 30,
@@ -184,6 +149,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm + 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navIconBoxActive: {
+    backgroundColor: colors.rust,
   },
   navLabel: {
     fontSize: 13,
@@ -193,10 +161,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.sidebarBorder,
   },
   footerText: {
-    color: colors.inkSoft,
+    color: colors.sidebarTextSoft,
     fontSize: 11,
     fontFamily: fonts.sansRegular,
   },

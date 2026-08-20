@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Modal, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, Bell, Menu, ChevronDown, User, Settings, LogOut } from 'lucide-react-native';
-import { colors, fonts, radii } from '../theme/tokens';
+import { colors, fonts, radii, shadows } from '../theme/tokens';
 import { NOTIFICATIONS, CURRENT_USER, unreadNotificationsCount } from '../data/mockData';
 import { useNotificationsUI } from '../context/NotificationsUIContext';
 import { useIsWideScreen } from '../hooks/useIsWideScreen';
@@ -28,7 +28,13 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
     <View style={[styles.wrap, { paddingTop: insets.top + 10 }]}>
       <View style={styles.row}>
         {!isWideScreen && (
-          <Pressable onPress={onOpenMenu} hitSlop={10} style={styles.iconBtn}>
+          <Pressable
+            onPress={onOpenMenu}
+            hitSlop={10}
+            style={styles.iconBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Open navigation menu"
+          >
             <Menu size={22} color={colors.ink} />
           </Pressable>
         )}
@@ -44,18 +50,31 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
               placeholder="Search anything…"
               placeholderTextColor={colors.inkSoft}
               style={styles.searchInput}
+              accessibilityLabel="Search applications"
             />
           </View>
         </View>
 
-        <Pressable onPress={openNotifPanel} hitSlop={10} style={styles.iconBtn}>
+        <Pressable
+          onPress={openNotifPanel}
+          hitSlop={10}
+          style={styles.iconBtn}
+          accessibilityRole="button"
+          accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+        >
           <View>
             <Bell size={20} color={colors.inkSoft} />
             {unread > 0 && <View style={styles.dot} />}
           </View>
         </Pressable>
 
-        <Pressable onPress={() => setProfileOpen(true)} hitSlop={8} style={styles.profileBtn}>
+        <Pressable
+          onPress={() => setProfileOpen(true)}
+          hitSlop={8}
+          style={styles.profileBtn}
+          accessibilityRole="button"
+          accessibilityLabel={`Account menu for ${CURRENT_USER.name}`}
+        >
           <View style={styles.avatarRing}>
             <Avatar name={CURRENT_USER.name} size={32} />
             <View style={styles.statusDot} />
@@ -94,15 +113,15 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
               <Text style={styles.profileName}>{CURRENT_USER.name}</Text>
               <Text style={styles.profileEmail}>{CURRENT_USER.email}</Text>
             </View>
-            <Pressable style={styles.menuRow} onPress={() => { setProfileOpen(false); onOpenSettings(); }}>
+            <Pressable style={styles.menuRow} onPress={() => { setProfileOpen(false); onOpenSettings(); }} accessibilityRole="button" accessibilityLabel="Profile">
               <User size={15} color={colors.inkSoft} />
               <Text style={styles.menuLabel}>Profile</Text>
             </Pressable>
-            <Pressable style={styles.menuRow} onPress={() => { setProfileOpen(false); onOpenSettings(); }}>
+            <Pressable style={styles.menuRow} onPress={() => { setProfileOpen(false); onOpenSettings(); }} accessibilityRole="button" accessibilityLabel="Settings">
               <Settings size={15} color={colors.inkSoft} />
               <Text style={styles.menuLabel}>Settings</Text>
             </Pressable>
-            <Pressable style={styles.menuRow} onPress={() => { setProfileOpen(false); onSignOut(); }}>
+            <Pressable style={styles.menuRow} onPress={() => { setProfileOpen(false); onSignOut(); }} accessibilityRole="button" accessibilityLabel="Sign out">
               <LogOut size={15} color={colors.inkSoft} />
               <Text style={styles.menuLabel}>Sign out</Text>
             </Pressable>
@@ -139,7 +158,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.cream2,
+    backgroundColor: colors.appBg,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.pill,
@@ -149,11 +168,9 @@ const styles = StyleSheet.create({
   searchBoxFocused: {
     borderColor: colors.rust,
     backgroundColor: colors.white,
+    ...shadows.md,
     shadowColor: colors.rust,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 3,
   },
   searchInput: {
     flex: 1,
@@ -224,14 +241,11 @@ const styles = StyleSheet.create({
     width: 280,
     maxWidth: 320,
     backgroundColor: colors.white,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
-      android: { elevation: 10 },
-    }),
+    ...shadows.xl,
   },
   dropdownTitle: {
     fontSize: 13.5,

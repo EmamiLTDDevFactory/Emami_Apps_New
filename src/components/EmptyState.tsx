@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Inbox } from 'lucide-react-native';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, radii } from '../theme/tokens';
 
 interface EmptyStateProps {
   query?: string;
@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: radii.pill,
     backgroundColor: colors.cream,
     alignItems: 'center',
     justifyContent: 'center',
