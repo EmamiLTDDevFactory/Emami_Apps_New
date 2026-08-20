@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,16 +13,27 @@ function RootLayoutNav() {
   const { isAuthenticated, isInitializing, currentUser, logout } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  // Tracks the last route this effect actually navigated to, so a redundant
+  // re-run with the same resolved auth state (e.g. segments settling after
+  // a web navigation) doesn't push a second duplicate history entry — while
+  // still firing for real transitions like a successful login or logout.
+  const lastAutoRedirect = useRef<string | null>(null);
 
   useEffect(() => {
     if (isInitializing) return;
 
     const inAuthGroup = segments[0] === 'apps' && segments[1] === 'expense' && segments[2] === 'login';
 
+    let target: string | null = null;
     if (!isAuthenticated && !inAuthGroup) {
-      router.push('/apps/expense/login');
+      target = '/apps/expense/login';
     } else if (isAuthenticated && inAuthGroup) {
-      router.push('/apps/expense/(tabs)');
+      target = '/apps/expense/(tabs)';
+    }
+
+    if (target && lastAutoRedirect.current !== target) {
+      lastAutoRedirect.current = target;
+      router.push(target);
     }
   }, [isAuthenticated, isInitializing, segments]);
 
