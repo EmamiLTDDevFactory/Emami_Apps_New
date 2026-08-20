@@ -6,7 +6,10 @@ import { colors, fonts, radii, shadows } from '../theme/tokens';
 import { NOTIFICATIONS, CURRENT_USER, unreadNotificationsCount } from '../data/mockData';
 import { useNotificationsUI } from '../context/NotificationsUIContext';
 import { useIsWideScreen } from '../hooks/useIsWideScreen';
+import { useTypewriterPlaceholder } from '../hooks/useTypewriterPlaceholder';
 import Avatar from './Avatar';
+
+const SEARCH_EXAMPLES = ['Dispatch Tracker', 'RC Portal', 'Non CTC Expense', 'MoldHealthCheck'];
 
 interface HeaderProps {
   searchValue: string;
@@ -23,6 +26,8 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
   const [searchFocused, setSearchFocused] = useState(false);
   const unread = unreadNotificationsCount;
   const isWideScreen = useIsWideScreen();
+  const showAnimatedPlaceholder = !searchValue && !searchFocused;
+  const animatedExample = useTypewriterPlaceholder(SEARCH_EXAMPLES, showAnimatedPlaceholder);
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + 10 }]}>
@@ -47,7 +52,7 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
               onChangeText={onSearchChange}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              placeholder="Search anything…"
+              placeholder={showAnimatedPlaceholder && animatedExample ? `Search: ${animatedExample}` : 'Search anything…'}
               placeholderTextColor={colors.inkSoft}
               style={styles.searchInput}
               accessibilityLabel="Search applications"
