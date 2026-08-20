@@ -8,6 +8,7 @@ export type DrawerParamList = {
   AllApplications: undefined;
   Help: undefined;
   Settings: undefined;
+  UserAccess: undefined;
 };
 
 export type RootStackParamList = {

@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Emami Apps",
+  "short_name": "Emami Apps",
+  "description": "Single sign-on hub for all Emami Group applications.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EEF0F4",
+  "theme_color": "#241E3D",
+  "icons": [
+    { "src": "/icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -22,6 +22,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
           AllApplications: 'all-applications',
           Help: 'help',
           Settings: 'settings',
+          UserAccess: 'manage-access',
         },
       },
       AppDetail: 'apps/:appId',

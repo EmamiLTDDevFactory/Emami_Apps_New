@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import {
   Landmark, Truck, Activity, Receipt, Home, LayoutGrid, Star, Clock,
-  Grid3x3, HelpCircle, Settings,
+  Grid3x3, HelpCircle, Settings, ShieldCheck,
 } from 'lucide-react-native';
 import type { AppItem, RecentEntry, NotificationItem, NavItem, CategoryFilter } from '../types';
 
@@ -75,6 +75,7 @@ export const NAV: NavItem[] = [
   { id: 'AllApplications', label: 'All Applications', icon: Grid3x3 },
   { id: 'Help', label: 'Help & Support', icon: HelpCircle },
   { id: 'Settings', label: 'Settings', icon: Settings },
+  { id: 'UserAccess', label: 'Manage Access', icon: ShieldCheck },
 ];
 
 export const CURRENT_USER = {
@@ -85,6 +86,21 @@ export const CURRENT_USER = {
   status: 'Active',
   lastLogin: 'Today, 9:42 AM',
 };
+
+// Seed data for the "Manage Access" screen. This is a placeholder allow-list
+// only — there is no backend or auth enforcement behind it yet. It exists so
+// the admin-facing entry point (per-user, per-app access) is in place before
+// the real access-control system (roles, invites, SSO sync) is designed.
+export interface UserAccessEntry {
+  email: string;
+  /** App ids (see APPS) this user is granted access to. */
+  appIds: string[];
+}
+
+export const AUTHORIZED_USERS: UserAccessEntry[] = [
+  { email: 'sudiptoroy@emamigroup.com', appIds: APPS.map((a) => a.id) },
+  { email: 'admin@emamigroup.com', appIds: APPS.map((a) => a.id) },
+];
 
 export const ACTIVITY_STATS = {
   sessionsTotal: 1,

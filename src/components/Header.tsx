@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Modal, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, Bell, Menu, ChevronDown, User, Settings, LogOut } from 'lucide-react-native';
+import { Search, Bell, Menu, ChevronDown, User, Settings, LogOut, Download } from 'lucide-react-native';
 import { colors, fonts, radii, shadows } from '../theme/tokens';
 import { NOTIFICATIONS, CURRENT_USER, unreadNotificationsCount } from '../data/mockData';
 import { useNotificationsUI } from '../context/NotificationsUIContext';
 import { useIsWideScreen } from '../hooks/useIsWideScreen';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 import Avatar from './Avatar';
 
 interface HeaderProps {
@@ -21,8 +22,18 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
   const { isOpen: notifOpen, openPanel: openNotifPanel, closePanel: closeNotifPanel } = useNotificationsUI();
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
   const unread = unreadNotificationsCount;
   const isWideScreen = useIsWideScreen();
+  const pwaInstall = usePwaInstall();
+
+  const onPressInstall = async () => {
+    if (pwaInstall.canPromptInstall) {
+      await pwaInstall.promptInstall();
+      return;
+    }
+    setInstallOpen(true);
+  };
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + 10 }]}>
@@ -67,6 +78,18 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
             {unread > 0 && <View style={styles.dot} />}
           </View>
         </Pressable>
+
+        {pwaInstall.isSupported && (
+          <Pressable
+            onPress={onPressInstall}
+            hitSlop={10}
+            style={styles.iconBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Install Emami Apps to this device"
+          >
+            <Download size={20} color={colors.inkSoft} />
+          </Pressable>
+        )}
 
         <Pressable
           onPress={() => setProfileOpen(true)}
@@ -125,6 +148,25 @@ export default function Header({ searchValue, onSearchChange, onOpenMenu, onSign
               <LogOut size={15} color={colors.inkSoft} />
               <Text style={styles.menuLabel}>Sign out</Text>
             </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={installOpen} transparent animationType="fade" onRequestClose={() => setInstallOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setInstallOpen(false)}>
+          <View style={[styles.dropdown, { top: insets.top + 56, right: 16, width: 260 }]}>
+            <Text style={styles.dropdownTitle}>Install Emami Apps</Text>
+            <View style={styles.installBody}>
+              <Text style={styles.installText}>
+                {pwaInstall.isStandalone
+                  ? 'Emami Apps is already installed on this device.'
+                  : !pwaInstall.isSecureContext
+                    ? 'This page was opened over an insecure connection (not HTTPS), so browsers block app installs here. Open the app\'s regular https:// address (or http://localhost during development) and try again.'
+                    : pwaInstall.isIos
+                      ? 'Tap the Share icon in Safari (the square with an arrow), then choose "Add to Home Screen".'
+                      : 'Look for the install icon (⊕ or a monitor with an arrow) at the right of your browser\'s address bar — or open the browser\'s ⋮ menu and choose "Install Emami Apps" / "Add to Home screen".'}
+              </Text>
+            </View>
           </View>
         </Pressable>
       </Modal>
@@ -307,5 +349,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.ink,
     fontFamily: fonts.sansMedium,
+  },
+  installBody: {
+    padding: 14,
+  },
+  installText: {
+    fontSize: 12.5,
+    color: colors.inkSoft,
+    fontFamily: fonts.sansRegular,
+    lineHeight: 18,
   },
 });

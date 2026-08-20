@@ -8,6 +8,7 @@ import AppListScreen from '../screens/AppListScreen';
 import RecentScreen from '../screens/RecentScreen';
 import HelpScreen from '../screens/HelpScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import UserAccessScreen from '../screens/UserAccessScreen';
 import type { DrawerParamList } from './types';
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
@@ -44,6 +45,7 @@ export default function DrawerNavigator() {
       </Drawer.Screen>
       <Drawer.Screen name="Help" component={HelpScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
+      <Drawer.Screen name="UserAccess" component={UserAccessScreen} />
     </Drawer.Navigator>
   );
 }
