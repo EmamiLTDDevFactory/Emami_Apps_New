@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import * as Icons from "phosphor-react-native";
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, findNodeHandle, LayoutAnimation, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from "react-native";
+import { ActivityIndicator, Alert, findNodeHandle, LayoutAnimation, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from "react-native";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -191,6 +191,31 @@ const groupBy = (array: any[], key: string) => {
     return result;
   }, {});
 };
+
+/**
+ * Groups already-flattened material rows (allMolds shape) into per-entity Running/NPA/Acquisition/
+ * Depreciation totals — used to re-derive Brands/Vendors Overview scoped to a Component/Part
+ * selection, without touching the original groupedBrands/groupedVendors (still used elsewhere for
+ * the System Overview widget, dropdowns, and Portfolio Insights charts).
+ */
+const groupByEntity = (materials: any[], keyField: string, nameField?: string) => {
+  const groups: Record<string, { id: string; name: string; running: number; npa: number; totalCost: number; totalDepreciation: number; materials: any[] }> = {};
+  materials.forEach((m: any) => {
+    const key = m[keyField];
+    if (!key) return;
+    if (!groups[key]) {
+      groups[key] = { id: key, name: (nameField ? m[nameField] : key) || key, running: 0, npa: 0, totalCost: 0, totalDepreciation: 0, materials: [] };
+    }
+    if (m.status === "Running Asset") groups[key].running += 1; else groups[key].npa += 1;
+    groups[key].totalCost += m.cost || 0;
+    groups[key].totalDepreciation += Math.abs(m.depreciation || 0);
+    groups[key].materials.push(m);
+  });
+  return Object.values(groups);
+};
+
+/** Ranks Brands/Vendors Overview entities by Acquisition Value first, Running count as tie-breaker. */
+const rankByRunningAndValue = (entities: any[]) => [...entities].sort((a, b) => (b.totalCost - a.totalCost) || (b.running - a.running));
 
 /** Mold category code -> display name (C1/C2/C3 -> Injection/Cubic/Core Back). */
 const CATEGORY_DISPLAY_NAMES: Record<string, string> = { C1: "Injection", C2: "Cubic", C3: "Core Back" };
@@ -1337,6 +1362,10 @@ export default function AdminDashboardScreen() {
   const [globalTooltip, setGlobalTooltip] = useState<{ visible: boolean, text: string, x: number, y: number } | null>(null);
 
   const [vendorAssetsData, setVendorAssetsData] = useState<any[]>([]);
+  // Gates the entire dashboard behind a real loading screen until the first API response (success
+  // or failure) comes back — before that, groupedVendors/groupedBrands/allMolds fall back to
+  // MOCK_* data, which must never be shown to the user as if it were real.
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchVendorData = async () => {
@@ -1365,6 +1394,8 @@ export default function AdminDashboardScreen() {
         setVendorAssetsData(res.data?.d?.results || []);
       } catch (err) {
         console.error("Failed to fetch vendor dashboard data", err);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchVendorData();
@@ -1509,6 +1540,34 @@ export default function AdminDashboardScreen() {
     }));
   }, [vendorAssetsData]);
 
+  // Brands Overview / Vendors Overview now start from Component/Part, same as the Inspection &
+  // At-Risk Overview hierarchy — one selection (or "All") per section scopes which brand/vendor
+  // totals are shown. Independent per section so filtering one doesn't affect the other. Declared
+  // here (ahead of groupedBrandsScoped/groupedVendorsScoped below, which read them) rather than
+  // down with the other Brands/Vendors Overview UI state.
+  const [brandsCompPartFilter, setBrandsCompPartFilter] = useState<string | null>(null);
+  const [vendorsCompPartFilter, setVendorsCompPartFilter] = useState<string | null>(null);
+
+  // Component/Part options shared by the Brands Overview and Vendors Overview filter rows below —
+  // every component/part present in the data, most common first.
+  const overviewCompPartOptions = React.useMemo(() => {
+    return Object.entries(groupBy(allMolds, "compPart"))
+      .map(([key, items]: any) => ({ key, label: key && key !== "undefined" ? key : "Unspecified", count: items.length }))
+      .sort((a, b) => b.count - a.count);
+  }, [allMolds]);
+
+  /** Brands Overview, scoped to the selected Component/Part (or every material when unset). */
+  const groupedBrandsScoped = React.useMemo(() => {
+    const scope = brandsCompPartFilter ? allMolds.filter((m: any) => m.compPart === brandsCompPartFilter) : allMolds;
+    return groupByEntity(scope, "brandName");
+  }, [allMolds, brandsCompPartFilter]);
+
+  /** Vendors Overview, scoped to the selected Component/Part (or every material when unset). */
+  const groupedVendorsScoped = React.useMemo(() => {
+    const scope = vendorsCompPartFilter ? allMolds.filter((m: any) => m.compPart === vendorsCompPartFilter) : allMolds;
+    return groupByEntity(scope, "vendorId", "vendorName");
+  }, [allMolds, vendorsCompPartFilter]);
+
   // Dashboard Widget Expansion State
   const [expandedWidget, setExpandedWidget] = useState<"system" | "cost" | "vendors" | "brands" | "products" | null>(null);
 
@@ -1559,6 +1618,11 @@ export default function AdminDashboardScreen() {
   const [brandOverviewSearch, setBrandOverviewSearch] = useState("");
   const [vendorOverviewSearch, setVendorOverviewSearch] = useState("");
 
+  // Both sections default to their top 10 (by Acquisition Value, Running count as tie-breaker) —
+  // "Show more" reveals the rest. Resets automatically whenever the Component/Part scope changes.
+  const [showAllBrandsOverview, setShowAllBrandsOverview] = useState(false);
+  const [showAllVendorsOverview, setShowAllVendorsOverview] = useState(false);
+
   // Inline (no modal) drill-down state for Brands Overview / Vendors Overview — tapping a tile
   // toggles the matching id, and the panel renders right below that section's tile grid. Selecting
   // a tile also scrolls the main content down to the panel, since it can render well below the fold.
@@ -1567,6 +1631,19 @@ export default function AdminDashboardScreen() {
   const mainScrollRef = useRef<ScrollView>(null);
   const brandPanelRef = useRef<View>(null);
   const vendorPanelRef = useRef<View>(null);
+
+  // Section Quick Nav — lets the user jump straight to any dashboard section instead of scrolling
+  // past everything above it.
+  const orgOverviewRef = useRef<View>(null);
+  const inspectionOverviewRef = useRef<View>(null);
+  const criticalityOverviewRef = useRef<View>(null);
+  const brandsOverviewRef = useRef<View>(null);
+  const vendorsOverviewRef = useRef<View>(null);
+  const portfolioInsightsRef = useRef<View>(null);
+  const systemOverviewRef = useRef<View>(null);
+  const costAnalysisRef = useRef<View>(null);
+  const drilldownRef = useRef<View>(null);
+  const [activeNavSection, setActiveNavSection] = useState<string | null>(null);
 
   // Shared cascading drill-down filters for Inspection Overview AND At-Risk Moulds — both
   // sections use the identical Component/Part → Brand → Sub Brand → Vendor → Region →
@@ -1745,8 +1822,8 @@ export default function AdminDashboardScreen() {
   };
 
   const currentLevel = hierarchyMode === "Vendor-wise"
-    ? (state.criticality ? "Molds" : state.assetType ? "Criticality" : state.moldCategory ? "Asset Types" : state.region ? "Categories" : state.product ? "Regions" : state.brand ? "Products" : state.vendor ? "Brands" : state.compPart ? "Vendors" : "Component/Part")
-    : (state.criticality ? "Molds" : state.assetType ? "Criticality" : state.moldCategory ? "Asset Types" : state.vendor ? "Categories" : state.region ? "Vendors" : state.product ? "Regions" : state.brand ? "Products" : state.compPart ? "Brands" : "Component/Part");
+    ? (state.criticality ? "Molds" : state.assetType ? "Criticality" : state.moldCategory ? "Asset Types" : state.region ? "Categories" : state.product ? "Regions" : state.brand ? "Products" : state.vendor ? "Brands" : state.compPart ? "Vendors" : "")
+    : (state.criticality ? "Molds" : state.assetType ? "Criticality" : state.moldCategory ? "Asset Types" : state.vendor ? "Categories" : state.region ? "Vendors" : state.product ? "Regions" : state.brand ? "Products" : state.compPart ? "Brands" : "");
 
   // --- CALCULATED VALUES FOR WIDGETS AND MODALS ---
   const filteredVendors = MOCK_VENDORS.filter(v => selectedVendors.includes(v.id));
@@ -1841,17 +1918,20 @@ export default function AdminDashboardScreen() {
     .sort((a: any, b: any) => b.value - a.value)
     .slice(0, 6);
 
-  // Category breakdown — asset count per already-computed `category` field (C1/C2/C3) on allMolds.
-  const categoryChartData = Object.entries(groupBy(allMolds, "category")).map(([cat, items]: any) => ({
-    label: CATEGORY_DISPLAY_NAMES[cat] || cat,
-    value: items.length,
-  }));
+  // Category breakdown — asset count per already-computed `category` field (C1/C2/C3...) on allMolds.
+  // Top 8 by count so the fixed-width card never has to cram more bars than it can legibly show
+  // (real data can have more mould categories than the three named ones).
+  const categoryChartData = Object.entries(groupBy(allMolds, "category"))
+    .map(([cat, items]: any) => ({ label: CATEGORY_DISPLAY_NAMES[cat] || cat, value: items.length }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8);
 
   // Region breakdown — asset count per already-computed `region` field (VendRegion) on allMolds.
-  const regionChartData = Object.entries(groupBy(allMolds, "region")).map(([region, items]: any) => ({
-    label: region,
-    value: items.length,
-  }));
+  // Top 8 by count, same reasoning as categoryChartData — real data can have a couple dozen regions.
+  const regionChartData = Object.entries(groupBy(allMolds, "region"))
+    .map(([region, items]: any) => ({ label: region, value: items.length }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8);
 
   // Domestic vs International split, each broken down by Running/NPA — driven by Zbusiness
   // (businessArea === '03' = International, everything else = Domestic), not country.
@@ -2856,6 +2936,47 @@ export default function AdminDashboardScreen() {
     </>
   );
 
+  // Brands Overview / Vendors Overview — top 10 by Acquisition Value (Running count as tie-breaker),
+  // with "Show more" revealing the rest. A search always searches the full scoped list, not just
+  // the top 10.
+  const OVERVIEW_TOP_N = 10;
+  const rankedBrandsOverview = rankByRunningAndValue(groupedBrandsScoped);
+  const filteredBrandsOverview = rankedBrandsOverview.filter((brand: any) => brand.name.toLowerCase().includes(brandOverviewSearch.toLowerCase()));
+  const visibleBrandsOverview = brandOverviewSearch || showAllBrandsOverview ? filteredBrandsOverview : filteredBrandsOverview.slice(0, OVERVIEW_TOP_N);
+
+  const rankedVendorsOverview = rankByRunningAndValue(groupedVendorsScoped);
+  const filteredVendorsOverview = rankedVendorsOverview.filter((vendor: any) => vendor.name.toLowerCase().includes(vendorOverviewSearch.toLowerCase()));
+  const visibleVendorsOverview = vendorOverviewSearch || showAllVendorsOverview ? filteredVendorsOverview : filteredVendorsOverview.slice(0, OVERVIEW_TOP_N);
+
+  // Jump to any dashboard section instead of scrolling past everything above it.
+  const sectionNavItems = [
+    { key: "org", label: "Organizational Overview", ref: orgOverviewRef },
+    { key: "inspection", label: "Inspection & At-Risk Overview", ref: inspectionOverviewRef },
+    { key: "criticality", label: "Criticality Overview", ref: criticalityOverviewRef },
+    { key: "brands", label: "Brands Overview", ref: brandsOverviewRef },
+    { key: "vendors", label: "Vendors Overview", ref: vendorsOverviewRef },
+    { key: "portfolio", label: "Portfolio Insights", ref: portfolioInsightsRef },
+    { key: "system", label: "System Overview", ref: systemOverviewRef },
+    // Cost Analysis and Drilldown sections are commented out below, so they're dropped from the nav too.
+  ];
+
+  // Unique loading phase — while the first API response is in flight, show a dedicated loading
+  // screen instead of the dashboard. groupedVendors/groupedBrands/allMolds fall back to MOCK_* data
+  // when vendorAssetsData is empty, and that fallback must never flash on screen as if it were real.
+  if (isLoading) {
+    return (
+      <View style={[styles.root, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }, styles.loadingScreen]}>
+        <StatusBar style="light" />
+        <View style={styles.loadingIconWrap}>
+          <Icons.SquaresFour size={36} color={colors.brand} weight="duotone" />
+        </View>
+        <ActivityIndicator size="large" color={colors.brand} style={{ marginTop: 24 }} />
+        <Text style={styles.loadingTitle}>Loading Admin Dashboard</Text>
+        <Text style={styles.loadingSubtitle}>Fetching live mould & vendor data…</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, isTabletUp && { paddingLeft: SIDEBAR_WIDTH }]}>
       <StatusBar style="light" />
@@ -3122,10 +3243,24 @@ export default function AdminDashboardScreen() {
       {!expandedWidget && (
         <ScrollView ref={mainScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}>
 
+          {/* SECTION QUICK NAV — jump straight to any dashboard section instead of scrolling past
+              everything above it. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 20 }}>
+            {sectionNavItems.map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                onPress={() => { setActiveNavSection(item.key); scrollToPanel(item.ref); }}
+                style={[styles.pillBtn, activeNavSection === item.key && styles.pillBtnActive]}
+              >
+                <Text style={[styles.pillText, activeNavSection === item.key && styles.pillTextActive]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
           {/* ORGANIZATIONAL OVERVIEW — headline org-wide numbers shown first: Acquisition/Depreciation
               value, at-risk mould count per category segment, and Domestic/International Running/NPA
               split. Backs the same totals shown per-brand/per-vendor in Brands Overview & Vendors Overview. */}
-          <View style={{ marginBottom: 24 }}>
+          <View ref={orgOverviewRef} style={{ marginBottom: 24 }}>
             <SectionTitle title="Organizational Overview" subtitle="Acquisition, current & depreciated value, at-risk moulds, and domestic/international split" />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 20 }}>
               <View style={{ flex: 1, minWidth: 200 }}>
@@ -3176,7 +3311,7 @@ export default function AdminDashboardScreen() {
               than 90 days or never inspected), and the org's most recent inspection date, plus the
               lowest remaining-life% / remaining-shots% moulds (NPA moulds excluded — retired,
               remaining life/shots isn't actionable for them). */}
-          <View style={{ marginBottom: 24 }}>
+          <View ref={inspectionOverviewRef} style={{ marginBottom: 24 }}>
             <SectionTitle title="Inspection & At-Risk Overview" subtitle="Coverage, submissions & at-risk ranking for Running Assets — filter once by Brand, Sub Brand, Vendor, Region & Domestic/International" />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, paddingHorizontal: 20 }}>
               <View style={{ flex: 1, minWidth: 210 }}>
@@ -3227,7 +3362,7 @@ export default function AdminDashboardScreen() {
               since we don't know this org's criticality codes/labels) instead of the old MOCK_MOLDS
               placeholder. */}
           {criticalityChartData.length > 0 && (
-            <View style={{ marginBottom: 24 }}>
+            <View ref={criticalityOverviewRef} style={{ marginBottom: 24 }}>
               <SectionTitle title="Criticality Overview" subtitle="Materials by criticality" />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 20 }}>
                 {criticalityChartData.map((c, i) => (
@@ -3249,9 +3384,26 @@ export default function AdminDashboardScreen() {
           {/* BRANDS OVERVIEW — real per-brand Running/NPA/Acquisition/Depreciation from groupedBrands
               (ZVendDashboardSet). Tapping a tile expands an inline panel right below the grid — no
               modal — showing that brand's Vendor breakdown, then each vendor's full material list. */}
-          {groupedBrands.length > 0 && (
-            <View style={{ marginBottom: 24 }}>
-              <SectionTitle title="Brands Overview" subtitle="Tap a brand to see its vendor & material breakdown" />
+          {groupedBrandsScoped.length > 0 && (
+            <View ref={brandsOverviewRef} style={{ marginBottom: 24 }}>
+              <SectionTitle title="Brands Overview" subtitle="Starts from Component/Part — tap a brand to see its vendor & material breakdown" />
+              <View style={{ paddingHorizontal: 20 }}>
+                <Text style={styles.inspectionDimensionLabel}>By Component/Part</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 8, paddingBottom: 4 }}>
+                  {overviewCompPartOptions.map((opt) => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      onPress={() => {
+                        setBrandsCompPartFilter((prev) => (prev === opt.key ? null : opt.key));
+                        setShowAllBrandsOverview(false);
+                      }}
+                      style={[styles.pillBtn, brandsCompPartFilter === opt.key && styles.pillBtnActive]}
+                    >
+                      <Text style={[styles.pillText, brandsCompPartFilter === opt.key && styles.pillTextActive]}>{opt.label} ({opt.count})</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
               <View style={[styles.searchBar, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
                 <Icons.MagnifyingGlass size={18} color={colors.textFaint} />
                 <TextInput
@@ -3268,19 +3420,25 @@ export default function AdminDashboardScreen() {
                 )}
               </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, paddingHorizontal: 20 }}>
-                {groupedBrands
-                  .filter((brand: any) => brand.name.toLowerCase().includes(brandOverviewSearch.toLowerCase()))
-                  .map((brand: any, i: number) => (
-                    <EntityOverviewCard
-                      key={brand.id}
-                      entity={brand}
-                      icon={Icons.Package}
-                      accentIndex={i}
-                      isSelected={expandedBrandId === brand.id}
-                      onPress={() => toggleBrandDrilldown(brand.id)}
-                    />
-                  ))}
+                {visibleBrandsOverview.map((brand: any, i: number) => (
+                  <EntityOverviewCard
+                    key={brand.id}
+                    entity={brand}
+                    icon={Icons.Package}
+                    accentIndex={i}
+                    isSelected={expandedBrandId === brand.id}
+                    onPress={() => toggleBrandDrilldown(brand.id)}
+                  />
+                ))}
               </View>
+              {!brandOverviewSearch && !showAllBrandsOverview && filteredBrandsOverview.length > OVERVIEW_TOP_N && (
+                <TouchableOpacity
+                  onPress={() => setShowAllBrandsOverview(true)}
+                  style={[styles.pillBtn, { alignSelf: "center", marginTop: 14 }]}
+                >
+                  <Text style={styles.pillText}>Show more ({filteredBrandsOverview.length - OVERVIEW_TOP_N} more)</Text>
+                </TouchableOpacity>
+              )}
               {!!expandedBrandId && (
                 <View ref={brandPanelRef} style={{ paddingHorizontal: 20, marginTop: 14 }}>
                   <EntityDrilldownPanel
@@ -3298,9 +3456,26 @@ export default function AdminDashboardScreen() {
 
           {/* VENDORS OVERVIEW — same pattern as Brands Overview, real data from groupedVendors: tap a tile
               to expand its inline panel — Brand breakdown, then each brand's full material list. */}
-          {groupedVendors.length > 0 && (
-            <View style={{ marginBottom: 24 }}>
-              <SectionTitle title="Vendors Overview" subtitle="Tap a vendor to see its brand & material breakdown" />
+          {groupedVendorsScoped.length > 0 && (
+            <View ref={vendorsOverviewRef} style={{ marginBottom: 24 }}>
+              <SectionTitle title="Vendors Overview" subtitle="Starts from Component/Part — tap a vendor to see its brand & material breakdown" />
+              <View style={{ paddingHorizontal: 20 }}>
+                <Text style={styles.inspectionDimensionLabel}>By Component/Part</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 8, paddingBottom: 4 }}>
+                  {overviewCompPartOptions.map((opt) => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      onPress={() => {
+                        setVendorsCompPartFilter((prev) => (prev === opt.key ? null : opt.key));
+                        setShowAllVendorsOverview(false);
+                      }}
+                      style={[styles.pillBtn, vendorsCompPartFilter === opt.key && styles.pillBtnActive]}
+                    >
+                      <Text style={[styles.pillText, vendorsCompPartFilter === opt.key && styles.pillTextActive]}>{opt.label} ({opt.count})</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
               <View style={[styles.searchBar, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
                 <Icons.MagnifyingGlass size={18} color={colors.textFaint} />
                 <TextInput
@@ -3317,21 +3492,27 @@ export default function AdminDashboardScreen() {
                 )}
               </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, paddingHorizontal: 20 }}>
-                {groupedVendors
-                  .filter((vendor: any) => vendor.name.toLowerCase().includes(vendorOverviewSearch.toLowerCase()))
-                  .map((vendor: any, i: number) => (
-                    <EntityOverviewCard
-                      key={vendor.id}
-                      entity={vendor}
-                      icon={Icons.Buildings}
-                      accentIndex={i + 2}
-                      isSelected={expandedVendorId === vendor.id}
-                      onPress={() => toggleVendorDrilldown(vendor.id)}
-                    />
-                  ))}
+                {visibleVendorsOverview.map((vendor: any, i: number) => (
+                  <EntityOverviewCard
+                    key={vendor.id}
+                    entity={vendor}
+                    icon={Icons.Buildings}
+                    accentIndex={i + 2}
+                    isSelected={expandedVendorId === vendor.id}
+                    onPress={() => toggleVendorDrilldown(vendor.id)}
+                  />
+                ))}
               </View>
+              {!vendorOverviewSearch && !showAllVendorsOverview && filteredVendorsOverview.length > OVERVIEW_TOP_N && (
+                <TouchableOpacity
+                  onPress={() => setShowAllVendorsOverview(true)}
+                  style={[styles.pillBtn, { alignSelf: "center", marginTop: 14 }]}
+                >
+                  <Text style={styles.pillText}>Show more ({filteredVendorsOverview.length - OVERVIEW_TOP_N} more)</Text>
+                </TouchableOpacity>
+              )}
               {!!expandedVendorId && (() => {
-                const vendor = groupedVendors.find((v: any) => v.id === expandedVendorId);
+                const vendor = groupedVendorsScoped.find((v: any) => v.id === expandedVendorId);
                 return (
                   <View ref={vendorPanelRef} style={{ paddingHorizontal: 20, marginTop: 14 }}>
                     <EntityDrilldownPanel
@@ -3351,7 +3532,7 @@ export default function AdminDashboardScreen() {
           {/* PORTFOLIO INSIGHTS — real KPI charts fed from already-computed groupedVendors/groupedBrands/allMolds values only.
               Criticality now has its own dedicated "Criticality Overview" section above (real Zcriticality
               values), so it isn't duplicated here as a chart. */}
-          <View style={{ marginBottom: 24 }}>
+          <View ref={portfolioInsightsRef} style={{ marginBottom: 24 }}>
             <SectionTitle title="Portfolio Insights" subtitle="Cost, depreciation, category & region" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16, paddingBottom: 4 }}>
               <View style={[styles.boxCard3D, shadow.soft, { width: 260, padding: 20, alignItems: 'center' }]}>
@@ -3381,45 +3562,52 @@ export default function AdminDashboardScreen() {
                 />
               </View>
 
-              <View style={[styles.boxCard3D, shadow.soft, { width: 320, padding: 20 }]}>
+              <View style={[styles.boxCard3D, shadow.soft, { width: 320, padding: 20, overflow: "hidden" }]}>
                 <Text style={styles.insightCardTitle}>Cost by Vendor</Text>
                 <BarChart data={vendorCostChartData} height={180} colors={[colors.success]} valueFormatter={formatINR} />
               </View>
 
-              <View style={[styles.boxCard3D, shadow.soft, { width: 320, padding: 20 }]}>
+              <View style={[styles.boxCard3D, shadow.soft, { width: 320, padding: 20, overflow: "hidden" }]}>
                 <Text style={styles.insightCardTitle}>Depreciation by Vendor</Text>
                 <BarChart data={vendorDeprChartData} height={180} colors={[colors.danger]} valueFormatter={formatINR} />
               </View>
 
-              <View style={[styles.boxCard3D, shadow.soft, { width: 300, padding: 20 }]}>
+              <View style={[styles.boxCard3D, shadow.soft, { width: 340, padding: 20, overflow: "hidden" }]}>
                 <Text style={styles.insightCardTitle}>Assets by Category</Text>
                 <BarChart data={categoryChartData} height={190} />
               </View>
 
-              <View style={[styles.boxCard3D, shadow.soft, { width: 300, padding: 20 }]}>
+              <View style={[styles.boxCard3D, shadow.soft, { width: 340, padding: 20, overflow: "hidden" }]}>
                 <Text style={styles.insightCardTitle}>Assets by Region</Text>
                 <BarChart data={regionChartData} height={190} />
               </View>
             </ScrollView>
           </View>
 
-          {renderSystemOverview()}
-          <View style={{ paddingHorizontal: 20 }}>
+          <View ref={systemOverviewRef}>{renderSystemOverview()}</View>
+
+          {/* INDIA ASSET MAP — not required, commented out. */}
+          {/* <View style={{ paddingHorizontal: 20 }}>
             <GeoMap3D data={vendorAssetsData} />
-          </View>
-          {renderCostAnalysis()}
+          </View> */}
 
-          {/* HIERARCHY TOGGLE */}
-          <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 20, marginTop: 10, gap: 12 }}>
-            <TouchableOpacity onPress={() => { setHierarchyMode("Brand-wise"); setState({ compPart: null, vendor: null, assetType: null, brand: null, product: null, material: null }); }} style={[styles.pillBtn, hierarchyMode === "Brand-wise" && styles.pillBtnActive]}>
-              <Text style={[styles.pillText, hierarchyMode === "Brand-wise" && styles.pillTextActive]}>Brand-wise Drilldown</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setHierarchyMode("Vendor-wise"); setState({ compPart: null, vendor: null, assetType: null, brand: null, product: null, material: null }); }} style={[styles.pillBtn, hierarchyMode === "Vendor-wise" && styles.pillBtnActive]}>
-              <Text style={[styles.pillText, hierarchyMode === "Vendor-wise" && styles.pillTextActive]}>Vendor-wise Drilldown</Text>
-            </TouchableOpacity>
-          </View>
+          {/* COST ANALYSIS — not required, commented out. */}
+          {/* <View ref={costAnalysisRef}>{renderCostAnalysis()}</View> */}
 
-          {hierarchyMode === "Vendor-wise" ? renderVendorWiseFlow() : renderBrandWiseFlow()}
+          {/* HIERARCHY TOGGLE + DRILLDOWN (Brand-wise/Vendor-wise, starting from Component/Part) —
+              not required, commented out. */}
+          {/* <View ref={drilldownRef}>
+            <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 20, marginTop: 10, gap: 12 }}>
+              <TouchableOpacity onPress={() => { setHierarchyMode("Brand-wise"); setState({ compPart: null, vendor: null, assetType: null, brand: null, product: null, material: null }); }} style={[styles.pillBtn, hierarchyMode === "Brand-wise" && styles.pillBtnActive]}>
+                <Text style={[styles.pillText, hierarchyMode === "Brand-wise" && styles.pillTextActive]}>Brand-wise Drilldown</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setHierarchyMode("Vendor-wise"); setState({ compPart: null, vendor: null, assetType: null, brand: null, product: null, material: null }); }} style={[styles.pillBtn, hierarchyMode === "Vendor-wise" && styles.pillBtnActive]}>
+                <Text style={[styles.pillText, hierarchyMode === "Vendor-wise" && styles.pillTextActive]}>Vendor-wise Drilldown</Text>
+              </TouchableOpacity>
+            </View>
+
+            {hierarchyMode === "Vendor-wise" ? renderVendorWiseFlow() : renderBrandWiseFlow()}
+          </View> */}
         </ScrollView>
       )}
 
@@ -3762,6 +3950,31 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: font.sub, color: colors.textMuted, fontWeight: font.bold },
   pillTextActive: { color: '#fff' },
+
+  loadingScreen: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: colors.brandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingTitle: {
+    marginTop: 20,
+    fontSize: font.title,
+    fontWeight: font.black,
+    color: colors.ink,
+  },
+  loadingSubtitle: {
+    marginTop: 6,
+    fontSize: font.sub,
+    color: colors.textMuted,
+    fontWeight: font.semibold,
+  },
 
   gridList: {
     flexDirection: "row",

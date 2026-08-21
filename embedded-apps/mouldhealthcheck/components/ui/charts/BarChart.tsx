@@ -109,7 +109,7 @@ export default function BarChart({
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: "row" },
+  wrap: { flexDirection: "row", width: "100%" },
   axisCol: { width: 52, justifyContent: "space-between", paddingRight: 8 },
   axisLabel: { fontSize: font.micro, color: colors.textFaint, fontWeight: font.medium, textAlign: "right" },
   chartCol: { flex: 1, minWidth: 0 },

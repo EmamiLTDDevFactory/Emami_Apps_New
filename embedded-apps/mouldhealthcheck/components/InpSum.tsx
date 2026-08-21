@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useGlobalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Icons from "phosphor-react-native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -51,6 +51,14 @@ export default function InpSum() {
   const [criticalityError, setCriticalityError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const inspectedOn = new Date().toLocaleDateString();
+
+  // Pre-fill "Inspected by" with the logged-in vendor's name once it's available — only while the
+  // field is still blank, so it never overwrites something the inspector already typed.
+  useEffect(() => {
+    if (user?.vendorName && !inspectedBy) {
+      setInspectedBy(user.vendorName);
+    }
+  }, [user?.vendorName]);
 
   const addRow = () => {
     Haptics.selectionAsync();
