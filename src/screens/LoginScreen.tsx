@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, ActivityIndicator,
+  View, Text, Pressable, StyleSheet, KeyboardAvoidingView,
+  Platform, ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
-import { BadgeCheck, ShieldCheck, ArrowLeft } from 'lucide-react-native';
+import { BadgeCheck } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { colors, fonts, radii } from '../theme/tokens';
 import EmpAppMark from '../components/EmpAppMark';
-import { requestOtp, verifyOtp } from '../lib/authApi';
+import { getMicrosoftSignInUrl } from '../lib/authApi';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  error?: string | null;
+  verifying?: boolean;
+  onDismissError?: () => void;
 }
 
 const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as const;
@@ -64,54 +66,31 @@ function AppsWordmark() {
   );
 }
 
-type Step = 'email' | 'otp';
+/** Classic four-square Microsoft glyph — lucide has no brand icon for this, so it's drawn directly. */
+function MicrosoftGlyph() {
+  const squares = ['#F25022', '#7FBA00', '#00A4EF', '#FFB900'];
+  return (
+    <View style={styles.msGlyph}>
+      {squares.map((color) => (
+        <View key={color} style={[styles.msGlyphSquare, { backgroundColor: color }]} />
+      ))}
+    </View>
+  );
+}
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen({ error, verifying, onDismissError }: LoginScreenProps) {
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState<Step>('email');
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  const sendOtp = async () => {
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setError('Enter your email to continue.');
-      return;
+  const signIn = () => {
+    onDismissError?.();
+    const url = getMicrosoftSignInUrl();
+    if (Platform.OS === 'web') {
+      window.location.href = url;
+    } else {
+      // Native completion (deep-linking back into the app after SSO) isn't
+      // wired up yet — this app is served as a web hub today.
+      Linking.openURL(url).catch(() => {});
     }
-    setError('');
-    setLoading(true);
-    const result = await requestOtp(trimmed);
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error || 'Something went wrong. Please try again.');
-      return;
-    }
-    setStep('otp');
-  };
-
-  const submitOtp = async () => {
-    const trimmedOtp = otp.trim();
-    if (!trimmedOtp) {
-      setError('Enter the one-time code sent to your email.');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    const result = await verifyOtp(email.trim(), trimmedOtp);
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error || 'Invalid email or OTP.');
-      return;
-    }
-    onLogin();
-  };
-
-  const goBackToEmail = () => {
-    setStep('email');
-    setOtp('');
-    setError('');
   };
 
   return (
@@ -149,72 +128,23 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </View>
 
           <View style={styles.card}>
-            {step === 'email' ? (
-              <>
-                <Text style={styles.welcome}>Welcome back</Text>
-                <Text style={styles.subtitle}>Sign in with your registered email</Text>
+            <Text style={styles.welcome}>{verifying ? 'Signing you in…' : 'Welcome back'}</Text>
+            <Text style={styles.subtitle}>
+              {verifying ? 'Verifying your Microsoft sign-in.' : 'Sign in with your Emami Microsoft work account'}
+            </Text>
 
-                <TextInput
-                  style={styles.input}
-                  value={email}
-                  onChangeText={(v) => { setEmail(v); setError(''); }}
-                  placeholder="you@emamigroup.com"
-                  placeholderTextColor={colors.inkSoft}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  editable={!loading}
-                  onSubmitEditing={sendOtp}
-                />
+            {!!error && <Text style={styles.error}>{error}</Text>}
 
-                {!!error && <Text style={styles.error}>{error}</Text>}
-
-                <Pressable onPress={sendOtp} style={styles.primaryBtn} disabled={loading}>
-                  {loading ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <>
-                      <ShieldCheck size={17} color={colors.white} />
-                      <Text style={styles.primaryBtnText}>Send one-time code</Text>
-                    </>
-                  )}
-                </Pressable>
-
-                <Text style={styles.helper}>No access? Contact IT.</Text>
-              </>
+            {verifying ? (
+              <ActivityIndicator size="small" color={colors.plumDeep} style={{ marginTop: 10 }} />
             ) : (
-              <>
-                <Text style={styles.welcome}>Enter your code</Text>
-                <Text style={styles.subtitle}>We've sent a one-time code to {email.trim()}</Text>
-
-                <TextInput
-                  style={[styles.input, styles.otpInput]}
-                  value={otp}
-                  onChangeText={(v) => { setOtp(v.replace(/[^0-9]/g, '')); setError(''); }}
-                  placeholder="••••••"
-                  placeholderTextColor={colors.inkSoft}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  editable={!loading}
-                  onSubmitEditing={submitOtp}
-                />
-
-                {!!error && <Text style={styles.error}>{error}</Text>}
-
-                <Pressable onPress={submitOtp} style={styles.primaryBtn} disabled={loading}>
-                  {loading ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Verify & sign in</Text>
-                  )}
-                </Pressable>
-
-                <Pressable onPress={goBackToEmail} style={styles.backRow} disabled={loading}>
-                  <ArrowLeft size={14} color={colors.inkSoft} />
-                  <Text style={styles.backText}>Use a different email</Text>
-                </Pressable>
-              </>
+              <Pressable onPress={signIn} style={styles.primaryBtn}>
+                <MicrosoftGlyph />
+                <Text style={styles.primaryBtnText}>Sign in with Microsoft</Text>
+              </Pressable>
             )}
+
+            <Text style={styles.helper}>Only @emamigroup.com accounts can sign in. No access? Contact IT.</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -382,24 +312,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-  input: {
-    width: '100%',
-    backgroundColor: colors.cream2,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.pill,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    fontFamily: fonts.sansMedium,
-    fontSize: 14.5,
-    color: colors.ink,
-    marginBottom: 8,
-  },
-  otpInput: {
-    textAlign: 'center',
-    letterSpacing: 6,
-    fontSize: 18,
-  },
   error: {
     width: '100%',
     fontFamily: fonts.sansMedium,
@@ -424,16 +336,16 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: colors.white,
   },
-  backRow: {
+  msGlyph: {
+    width: 16,
+    height: 16,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 18,
+    flexWrap: 'wrap',
+    gap: 1,
   },
-  backText: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 12.5,
-    color: colors.inkSoft,
+  msGlyphSquare: {
+    width: 7.5,
+    height: 7.5,
   },
   helper: {
     marginTop: 20,

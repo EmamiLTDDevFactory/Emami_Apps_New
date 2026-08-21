@@ -37,6 +37,10 @@ yarn-error.*
 .env.*
 !.env.example
 
+# Entra ID SAML IdP metadata Infra hands over — not secret, but org-specific
+# infra config kept out of source control like everything else in backend/.env.
+backend/saml/idp-metadata.xml
+
 # typescript
 *.tsbuildinfo
 
