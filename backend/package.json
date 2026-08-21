@@ -1,0 +1,15 @@
+{
+  "name": "emami-hub-auth-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server-side login (email + OTP) check for the Emami Apps hub — deployed as an AWS Lambda (see lambda.js) via scripts/deploy-lambdas.js, same pattern as the non-ctc-expense/rc-portal backends.",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "serverless-http": "^4.0.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

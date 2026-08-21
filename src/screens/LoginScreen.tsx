@@ -3,41 +3,17 @@ import {
   View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
   Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { CheckCircle2, BadgeCheck } from 'lucide-react-native';
+import { BadgeCheck, ShieldCheck, ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { colors, fonts, radii } from '../theme/tokens';
 import EmpAppMark from '../components/EmpAppMark';
+import { requestOtp, verifyOtp } from '../lib/authApi';
 
 interface LoginScreenProps {
   onLogin: () => void;
 }
-
-function MicrosoftMark() {
-  return (
-    <View style={msStyles.grid}>
-      <View style={[msStyles.tile, { backgroundColor: '#F35325' }]} />
-      <View style={[msStyles.tile, { backgroundColor: '#81BC06' }]} />
-      <View style={[msStyles.tile, { backgroundColor: '#05A6F0' }]} />
-      <View style={[msStyles.tile, { backgroundColor: '#FFBA08' }]} />
-    </View>
-  );
-}
-
-const msStyles = StyleSheet.create({
-  grid: {
-    width: 18,
-    height: 18,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
-  },
-  tile: {
-    width: 8,
-    height: 8,
-  },
-});
 
 const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as const;
 
@@ -88,17 +64,54 @@ function AppsWordmark() {
   );
 }
 
+type Step = 'email' | 'otp';
+
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const insets = useSafeAreaInsets();
-  const [email] = useState('sudiptoroy@emamigroup.com');
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const submit = () => {
+  const sendOtp = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Enter your email to continue.');
+      return;
+    }
+    setError('');
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      onLogin();
-    }, 700);
+    const result = await requestOtp(trimmed);
+    setLoading(false);
+    if (!result.ok) {
+      setError(result.error || 'Something went wrong. Please try again.');
+      return;
+    }
+    setStep('otp');
+  };
+
+  const submitOtp = async () => {
+    const trimmedOtp = otp.trim();
+    if (!trimmedOtp) {
+      setError('Enter the one-time code sent to your email.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    const result = await verifyOtp(email.trim(), trimmedOtp);
+    setLoading(false);
+    if (!result.ok) {
+      setError(result.error || 'Invalid email or OTP.');
+      return;
+    }
+    onLogin();
+  };
+
+  const goBackToEmail = () => {
+    setStep('email');
+    setOtp('');
+    setError('');
   };
 
   return (
@@ -136,24 +149,72 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.welcome}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in with your Microsoft work account</Text>
+            {step === 'email' ? (
+              <>
+                <Text style={styles.welcome}>Welcome back</Text>
+                <Text style={styles.subtitle}>Sign in with your registered email</Text>
 
-            <View style={styles.emailPill}>
-              <Text style={styles.emailText}>{email}</Text>
-              <CheckCircle2 size={16} color={colors.green} />
-            </View>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(v) => { setEmail(v); setError(''); }}
+                  placeholder="you@emamigroup.com"
+                  placeholderTextColor={colors.inkSoft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  editable={!loading}
+                  onSubmitEditing={sendOtp}
+                />
 
-            <Pressable onPress={submit} style={styles.msBtn} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator size="small" color={colors.ink} style={{ marginRight: 10 }} />
-              ) : (
-                <MicrosoftMark />
-              )}
-              <Text style={styles.msBtnText}>{loading ? 'Signing in…' : 'Sign in with Microsoft'}</Text>
-            </Pressable>
+                {!!error && <Text style={styles.error}>{error}</Text>}
 
-            <Text style={styles.helper}>Use your Emami Microsoft account. No access? Contact IT.</Text>
+                <Pressable onPress={sendOtp} style={styles.primaryBtn} disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <>
+                      <ShieldCheck size={17} color={colors.white} />
+                      <Text style={styles.primaryBtnText}>Send one-time code</Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Text style={styles.helper}>No access? Contact IT.</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.welcome}>Enter your code</Text>
+                <Text style={styles.subtitle}>We've sent a one-time code to {email.trim()}</Text>
+
+                <TextInput
+                  style={[styles.input, styles.otpInput]}
+                  value={otp}
+                  onChangeText={(v) => { setOtp(v.replace(/[^0-9]/g, '')); setError(''); }}
+                  placeholder="••••••"
+                  placeholderTextColor={colors.inkSoft}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  editable={!loading}
+                  onSubmitEditing={submitOtp}
+                />
+
+                {!!error && <Text style={styles.error}>{error}</Text>}
+
+                <Pressable onPress={submitOtp} style={styles.primaryBtn} disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Verify & sign in</Text>
+                  )}
+                </Pressable>
+
+                <Pressable onPress={goBackToEmail} style={styles.backRow} disabled={loading}>
+                  <ArrowLeft size={14} color={colors.inkSoft} />
+                  <Text style={styles.backText}>Use a different email</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -321,45 +382,58 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-  emailPill: {
+  input: {
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.cream2,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.pill,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 14,
-  },
-  emailText: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     fontFamily: fonts.sansMedium,
-    fontSize: 13.5,
+    fontSize: 14.5,
     color: colors.ink,
+    marginBottom: 8,
   },
-  msBtn: {
+  otpInput: {
+    textAlign: 'center',
+    letterSpacing: 6,
+    fontSize: 18,
+  },
+  error: {
+    width: '100%',
+    fontFamily: fonts.sansMedium,
+    fontSize: 12.5,
+    color: '#DC2626',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  primaryBtn: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.plumDeep,
     borderRadius: radii.pill,
     paddingVertical: 14,
-    gap: 12,
-    shadowColor: colors.ink,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    gap: 10,
+    marginTop: 10,
   },
-  msBtnText: {
+  primaryBtnText: {
     fontFamily: fonts.sansSemiBold,
     fontSize: 14.5,
-    color: colors.ink,
+    color: colors.white,
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 18,
+  },
+  backText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 12.5,
+    color: colors.inkSoft,
   },
   helper: {
     marginTop: 20,
