@@ -19,15 +19,17 @@ interface LoginScreenProps {
 }
 
 /**
- * TEMPORARY — real Microsoft SSO is fully built and confirmed working on the request side
- * (backend/server.js is a working SAML SP; a local test click-through reached Emami's actual
- * branded Microsoft login page). It can't reliably complete end-to-end in production yet though:
- * the deployed Lambda's Function URL intermittently/currently returns 403 on public traffic (an
- * AWS-account-level access issue, unrelated to this app's code, still being chased with AWS).
- * Rather than gate on one or the other, both sign-in options are offered side by side — "Sign in
- * with Microsoft" for whoever it works for, "Continue with Temporary Access" as a guaranteed
- * fallback that never depends on the Lambda. TO REVERT: set this back to false and remove the
- * temporary-access button once the Function URL issue is resolved for good.
+ * TEMPORARY — Microsoft sign-in now goes through OAuth2/OIDC on the mouldhealthcheck Azure App
+ * Service (embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section),
+ * replacing an earlier AWS Lambda + SAML implementation whose Function URL hit an unresolved
+ * AWS-account-level 403 (that Lambda code has been removed; this Azure route is the real one
+ * going forward). Verified locally (login redirect, token exchange, JWKS signature verification
+ * all work), but NOT yet confirmed end-to-end in production — that depends on this backend
+ * change actually being deployed to the Azure App Service and HUB_AUTH_JWT_SECRET being set
+ * there. Until that's confirmed, both sign-in options stay side by side — "Sign in with
+ * Microsoft" for whoever it works for, "Continue with Temporary Access" as a guaranteed
+ * fallback. TO REVERT: set this back to false and remove the temporary-access button once
+ * Microsoft sign-in is confirmed working end-to-end in production.
  */
 const SHOW_TEMP_SIGNIN = true;
 

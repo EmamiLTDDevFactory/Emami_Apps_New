@@ -189,6 +189,150 @@ app.use('/', apiRouter);
 app.use('/api/NGD', apiRouter);
 app.use('/api/users', apiRouter);
 
+/*
+   EMAMIAPPS HUB LOGIN — Microsoft Entra ID via OAuth2/OIDC Authorization Code flow.
+   Unrelated to mouldhealthcheck itself; co-hosted here only because this App Service is an
+   existing, working Azure deployment — the EmamiApps hub's own AWS Lambda Function URL was
+   blocked by an unresolved AWS-account-level access issue, so this sidesteps it entirely.
+   Deliberately reuses the SAME app registration as the SAP client-credentials flow above
+   (CLIENT_ID/CLIENT_SECRET) rather than a dedicated one — that was a conscious choice, not an
+   oversight, since it's the app registration Infra already had configured for this purpose.
+   The v2.0 endpoints + openid/profile/email scope used here are a different OAuth surface on
+   that SAME app registration from the v1 client-credentials flow above; both coexist fine.
+*/
+const jwt = require('jsonwebtoken');
+const jwksClient = require('jwks-rsa');
+const crypto = require('crypto');
+
+const HUB_TENANT_ID = 'd016aebd-1f96-4dd1-a22b-eeb0201fb61e';
+const HUB_AUTHORIZE_URL = `https://login.microsoftonline.com/${HUB_TENANT_ID}/oauth2/v2.0/authorize`;
+const HUB_TOKEN_URL = `https://login.microsoftonline.com/${HUB_TENANT_ID}/oauth2/v2.0/token`;
+const HUB_ISSUER = `https://login.microsoftonline.com/${HUB_TENANT_ID}/v2.0`;
+const HUB_SCOPE = 'openid profile email offline_access';
+const HUB_ALLOWED_EMAIL_DOMAIN = (process.env.HUB_AUTH_EMAIL_DOMAIN || 'emamigroup.com').trim().toLowerCase();
+const HUB_JWT_SECRET = process.env.HUB_AUTH_JWT_SECRET || '';
+const HUB_FRONTEND_REDIRECT_URL = process.env.HUB_AUTH_FRONTEND_URL || 'https://www.emamiapps.in';
+
+if (!HUB_JWT_SECRET) {
+    console.warn('[hub-auth] HUB_AUTH_JWT_SECRET is not set — hub login will fail at the callback step. Set it in this App Service\'s environment settings.');
+}
+
+const hubJwks = jwksClient({
+    jwksUri: `https://login.microsoftonline.com/${HUB_TENANT_ID}/discovery/v2.0/keys`,
+    cache: true,
+    cacheMaxAge: 12 * 60 * 60 * 1000,
+});
+
+/** Fetches Microsoft's current signing key by `kid` — this is what actually proves the ID token came from Microsoft, not just whoever POSTed it. */
+function getHubSigningKey(header, callback) {
+    hubJwks.getSigningKey(header.kid, (err, key) => {
+        if (err) return callback(err);
+        callback(null, key.getPublicKey());
+    });
+}
+
+function verifyHubIdToken(idToken) {
+    return new Promise((resolve, reject) => {
+        jwt.verify(idToken, getHubSigningKey, {
+            algorithms: ['RS256'],
+            audience: CLIENT_ID,
+            issuer: HUB_ISSUER,
+        }, (err, decoded) => {
+            if (err) return reject(err);
+            resolve(decoded);
+        });
+    });
+}
+
+// CSRF/replay guard for the OAuth redirect — single-instance in-memory store is fine here (an App
+// Service restart just means any in-flight login attempt has to restart too, same tradeoff the
+// EmamiApps hub's own rate limiter already accepted for the same reason).
+const hubAuthStates = new Map();
+const HUB_STATE_TTL_MS = 10 * 60 * 1000;
+function issueHubState() {
+    const state = crypto.randomBytes(16).toString('hex');
+    hubAuthStates.set(state, Date.now() + HUB_STATE_TTL_MS);
+    return state;
+}
+function consumeHubState(state) {
+    const expiry = hubAuthStates.get(state);
+    hubAuthStates.delete(state);
+    return !!expiry && Date.now() < expiry;
+}
+
+/** Built per-request so it always matches whatever host actually served the request (this App Service's real domain), not a hardcoded guess. */
+function getHubRedirectUri(req) {
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0];
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    return `${proto}://${host}/hub-auth/callback`;
+}
+
+/** Step 1 — redirect the browser to Microsoft to sign in. */
+apiRouter.get('/hub-auth/login', (req, res) => {
+    const state = issueHubState();
+    const params = new URLSearchParams({
+        client_id: CLIENT_ID,
+        response_type: 'code',
+        redirect_uri: getHubRedirectUri(req),
+        response_mode: 'query',
+        scope: HUB_SCOPE,
+        state,
+    });
+    res.redirect(`${HUB_AUTHORIZE_URL}?${params.toString()}`);
+});
+
+/** Step 2 — Microsoft redirects back here with a code. Exchange it, verify the ID token's signature, then bounce the browser to the frontend with a session token (or an error code) in the query string. */
+apiRouter.get('/hub-auth/callback', async (req, res) => {
+    const { code, state, error: oauthError } = req.query;
+    if (oauthError || !code || !state || !consumeHubState(String(state))) {
+        return res.redirect(`${HUB_FRONTEND_REDIRECT_URL}/?ssoError=invalid_response`);
+    }
+    if (!HUB_JWT_SECRET) {
+        return res.redirect(`${HUB_FRONTEND_REDIRECT_URL}/?ssoError=not_configured`);
+    }
+    try {
+        const tokenRes = await axios.post(HUB_TOKEN_URL, new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+            code: String(code),
+            redirect_uri: getHubRedirectUri(req),
+            scope: HUB_SCOPE,
+        }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+
+        const idToken = tokenRes.data?.id_token;
+        if (!idToken) throw new Error('Token response had no id_token');
+
+        const claims = await verifyHubIdToken(idToken);
+        const email = String(claims.email || claims.preferred_username || claims.upn || '').trim().toLowerCase();
+        if (!email || !email.endsWith(`@${HUB_ALLOWED_EMAIL_DOMAIN}`)) {
+            return res.redirect(`${HUB_FRONTEND_REDIRECT_URL}/?ssoError=domain_not_allowed`);
+        }
+
+        const sessionToken = jwt.sign({ email }, HUB_JWT_SECRET, { expiresIn: '12h' });
+        return res.redirect(`${HUB_FRONTEND_REDIRECT_URL}/?ssoToken=${encodeURIComponent(sessionToken)}`);
+    } catch (err) {
+        console.error('[hub-auth] callback failed:', err.response?.data || err.message);
+        return res.redirect(`${HUB_FRONTEND_REDIRECT_URL}/?ssoError=invalid_response`);
+    }
+});
+
+/** Step 3 — the frontend exchanges the token it got back for confirmation before flipping into the logged-in state. */
+apiRouter.post('/hub-auth/session/verify', (req, res) => {
+    const token = String(req.body?.token || '').trim();
+    if (!token || !HUB_JWT_SECRET) {
+        return res.status(400).json({ success: false, error: 'Invalid session.' });
+    }
+    try {
+        const payload = jwt.verify(token, HUB_JWT_SECRET);
+        if (!payload?.email || !String(payload.email).endsWith(`@${HUB_ALLOWED_EMAIL_DOMAIN}`)) {
+            return res.status(401).json({ success: false, error: 'Invalid session.' });
+        }
+        return res.json({ success: true, email: payload.email });
+    } catch {
+        return res.status(401).json({ success: false, error: 'Invalid or expired session.' });
+    }
+});
 
 apiRouter.get("/admin/log", async (req, res) => {
 

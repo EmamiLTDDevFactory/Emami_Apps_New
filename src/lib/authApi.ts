@@ -1,18 +1,21 @@
-// Talks to the hub-auth backend (backend/, deployed as a Lambda — see
-// scripts/deploy-lambdas.js). Login itself happens on Microsoft's side
-// (Entra ID SAML SSO, configured by Infra) — this file only points the
-// browser at the backend's SSO redirect and asks it to verify the session
-// token that redirect hands back afterward.
-const AUTH_API_URL = process.env.EXPO_PUBLIC_AUTH_API_URL || 'http://localhost:4000/api';
+// Talks to the EmamiApps hub login endpoints — co-hosted on the mouldhealthcheck Azure App
+// Service (embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section), not
+// a dedicated backend. That's a deliberate choice: it reuses existing, working Azure
+// infrastructure and the SAP integration's own app registration, sidestepping the AWS Lambda
+// Function URL this used to run on (blocked by an unresolved AWS-account-level access issue).
+// Login happens via Microsoft OAuth2/OIDC — this file only points the browser at the backend's
+// redirect and asks it to verify the session token that redirect hands back afterward.
+const AUTH_API_URL = process.env.EXPO_PUBLIC_AUTH_API_URL
+  || 'https://emdcindpwebapp1-bag2gfhjd9d4gkh6.centralindia-01.azurewebsites.net';
 
 /** Full-page navigation target for "Sign in with Microsoft" — not an XHR call. */
 export function getMicrosoftSignInUrl(): string {
-  return `${AUTH_API_URL}/auth/saml/login`;
+  return `${AUTH_API_URL}/hub-auth/login`;
 }
 
 export async function verifySsoToken(token: string): Promise<{ ok: boolean; email?: string; error?: string }> {
   try {
-    const res = await fetch(`${AUTH_API_URL}/auth/session/verify`, {
+    const res = await fetch(`${AUTH_API_URL}/hub-auth/session/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
