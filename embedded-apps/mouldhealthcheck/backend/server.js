@@ -1,3 +1,4 @@
+require('dotenv').config();
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const express = require('express');
@@ -6,6 +7,8 @@ const cors = require('cors');
 
 const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
+
+const { pool: pgPool, testConnection: testPgConnection } = require('./db');
 
 const app = express();
 
@@ -1119,8 +1122,21 @@ apiRouter.get("/getvenddashboard", async (req, res) => {
 });
 
 /*
+   POSTGRES HEALTH CHECK — confirms the Dev DB connection is alive and usable from the app.
+*/
+apiRouter.get('/db/health', async (req, res) => {
+    try {
+        const { rows } = await pgPool.query('SELECT NOW() AS now, current_database() AS db');
+        return res.json({ success: true, ...rows[0] });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/*
    START SERVER
 */
 app.listen(3001, '0.0.0.0', () => {
     console.log('Server running on port 3001');
+    testPgConnection();
 });

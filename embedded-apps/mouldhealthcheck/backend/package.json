@@ -14,8 +14,10 @@
     "axios": "^1.16.1",
     "axios-cookiejar-support": "^7.0.0",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "https": "^1.0.0",
+    "pg": "^8.23.0",
     "tough-cookie": "^6.0.1"
   }
 }
