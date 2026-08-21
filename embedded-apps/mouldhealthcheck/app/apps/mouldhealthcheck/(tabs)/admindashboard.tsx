@@ -258,9 +258,9 @@ const mapMaterialDetailFields = (asset: any) => ({
   mouldShots: asset.ZzmoldShots || asset.ZzmouldShots || asset.MouldShots || ".1995",
   remainingLife: asset.RemLife || asset.Remlife || asset.REMLIFE || "N/A",
   remainingShots: asset.RemShots || asset.Remshots || asset.REMSHOTS || "N/A",
-  inspectionCount: parseInt(asset.ZInspCount || asset.ZinspCount || asset.ZINSPCOUNT || asset.Zinspcount || "0", 10) || 0,
-  criticality: asset.ZCriticality || asset.Zcriticality || asset.ZCRITICALITY || "Unspecified",
-  lastInspectionDate: asset.ZLastInsp || asset.ZlastInsp || asset.ZLASTINSP || asset.Zlastinsp || "",
+  inspectionCount: parseInt(asset.ZinspCount || asset.ZInspCount || asset.ZINSPCOUNT || asset.Zinspcount || "0", 10) || 0,
+  criticality: asset.Zcriticality || asset.ZCriticality || asset.ZCRITICALITY || "Unspecified",
+  lastInspectionDate: asset.ZlastInsp || asset.ZLastInsp || asset.ZLASTINSP || asset.Zlastinsp || "",
   businessArea: asset.Zbusiness || asset.ZBusiness || asset.ZBUSINESS || "",
   // Component/Part description — the new top-level grouping for every filter & drill-down on this
   // page (added ahead of Brand/Vendor, not replacing them).
@@ -1374,19 +1374,20 @@ export default function AdminDashboardScreen() {
         // not guessed) — Zinspid is deliberately excluded, it isn't a real property on this entity.
         // VendCity/Znpa are included even though this file doesn't read them itself — GeoMap3D
         // consumes this same vendorAssetsData array and needs both (city plotting, its own NPA check).
-        // ZCriticality/ZLastInsp/ZInspCount are the confirmed casing for these three fields — an
-        // earlier version of this list used Zcriticality/ZlastInsp/ZinspCount, which the OData
-        // Gateway silently failed to resolve so the Inspection & At-Risk Overview never got real
-        // criticality/last-inspection/inspection-count data. ZLastInsp can still carry the ABAP
-        // zero-date "00000000" on some records, which the Gateway can't serialize as Edm.DateTime —
-        // if that ever fails the whole response again, the real fix is in SAP (clean up the bad date
-        // or have the model treat blank/zero ABAP dates as null), not re-dropping the field here.
+        // ZinspCount/Zcriticality/ZlastInsp (lowercase after Z, matching every other custom field in
+        // this list) are the actual OData property names — SAP's Gateway rejects ANY unrecognized
+        // $select property with a 400 ("Resource not found for the segment") that fails the ENTIRE
+        // request, not just that field, so a wrong casing here previously took down the whole
+        // dashboard's real data (silently falling back to mock data) rather than just these 3 fields.
+        // ZlastInsp can still carry the ABAP zero-date "00000000" on some records, which the Gateway
+        // can't serialize as Edm.DateTime — if that ever fails the whole response, the real fix is in
+        // SAP (clean up the bad date or have the model treat blank/zero ABAP dates as null).
         const vendDashboardSelect = [
           'Lifnr', 'Name1', 'Matnr', 'Maktx', 'Kansw', 'Knafa', 'Zrunning', 'Znpa',
           'BrandDesc', 'SubBrandDesc', 'VendRegion', 'Country', 'VendCity', 'Anln1', 'Zujhr', 'Aibdt',
           'ZzmoldCat', 'Zzrunner', 'Zzgran', 'ZzrunCavity', 'ZzfacProd', 'ZzhoursDay', 'ZzmdsCode',
           'Description', 'ZzmoldLife', 'ZzmoldShots', 'RemLife', 'RemShots',
-          'ZInspCount', 'ZCriticality', 'Zbusiness', 'ZLastInsp', 'CompPart'
+          'ZinspCount', 'Zcriticality', 'Zbusiness', 'ZlastInsp', 'CompPart'
         ].join(',');
         const res = await api.get('/ZMM_MOULD_CARE_SRV/ZVendDashboardSet', {
           params: { '$select': vendDashboardSelect, '$format': 'json' },
