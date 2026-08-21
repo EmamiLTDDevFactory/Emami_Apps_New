@@ -15,7 +15,18 @@ interface LoginScreenProps {
   error?: string | null;
   verifying?: boolean;
   onDismissError?: () => void;
+  onLogin?: () => void;
 }
+
+/**
+ * TEMPORARY — real Microsoft SSO is fully built (backend/server.js is a working SAML SP), but
+ * can't complete end-to-end yet: Infra hasn't handed back the IdP metadata XML, and separately the
+ * deployed Lambda's Function URL is returning 403 on all public traffic (an AWS-account-level
+ * access issue, unrelated to this app's code). Until BOTH are resolved, gate on nothing but "did
+ * they type something email-shaped" so the hub isn't fully locked out in the meantime.
+ * TO REVERT: set this back to false once SSO is confirmed working end-to-end.
+ */
+const TEMP_ALLOW_ANY_EMAIL = true;
 
 const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as const;
 
@@ -80,13 +91,14 @@ function MicrosoftGlyph() {
 
 const EMAMI_DOMAIN = '@emamigroup.com';
 
-export default function LoginScreen({ error, verifying, onDismissError }: LoginScreenProps) {
+export default function LoginScreen({ error, verifying, onDismissError, onLogin }: LoginScreenProps) {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [localError, setLocalError] = useState('');
 
   const trimmedEmail = email.trim().toLowerCase();
   const isEmamiDomain = trimmedEmail.endsWith(EMAMI_DOMAIN) && trimmedEmail.length > EMAMI_DOMAIN.length;
+  const looksLikeEmail = /^\S+@\S+\.\S+$/.test(trimmedEmail);
 
   const signIn = () => {
     setLocalError('');
@@ -96,6 +108,16 @@ export default function LoginScreen({ error, verifying, onDismissError }: LoginS
       setLocalError('Enter your email to continue.');
       return;
     }
+
+    if (TEMP_ALLOW_ANY_EMAIL) {
+      if (!looksLikeEmail) {
+        setLocalError('Enter a valid email address to continue.');
+        return;
+      }
+      onLogin?.();
+      return;
+    }
+
     if (!isEmamiDomain) {
       // Only @emamigroup.com accounts are set up on the SSO side (see
       // backend/server.js) — no point round-tripping through Microsoft for a
@@ -175,13 +197,19 @@ export default function LoginScreen({ error, verifying, onDismissError }: LoginS
                 {!!shownError && <Text style={styles.error}>{shownError}</Text>}
 
                 <Pressable onPress={signIn} style={styles.primaryBtn}>
-                  {isEmamiDomain && <MicrosoftGlyph />}
-                  <Text style={styles.primaryBtnText}>{isEmamiDomain ? 'Sign in with Microsoft' : 'Sign In'}</Text>
+                  {!TEMP_ALLOW_ANY_EMAIL && isEmamiDomain && <MicrosoftGlyph />}
+                  <Text style={styles.primaryBtnText}>
+                    {!TEMP_ALLOW_ANY_EMAIL && isEmamiDomain ? 'Sign in with Microsoft' : 'Sign In'}
+                  </Text>
                 </Pressable>
               </>
             )}
 
-            <Text style={styles.helper}>Only @emamigroup.com accounts can sign in. No access? Contact IT.</Text>
+            <Text style={styles.helper}>
+              {TEMP_ALLOW_ANY_EMAIL
+                ? 'Temporary open access while Microsoft sign-in is being finished.'
+                : 'Only @emamigroup.com accounts can sign in. No access? Contact IT.'}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

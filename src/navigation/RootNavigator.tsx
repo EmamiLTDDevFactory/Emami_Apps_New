@@ -55,7 +55,14 @@ export default function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isLoggedIn ? (
         <Stack.Screen name="Login">
-          {() => <LoginScreen error={ssoError} verifying={verifyingSso} onDismissError={() => setSsoError(null)} />}
+          {() => (
+            <LoginScreen
+              error={ssoError}
+              verifying={verifyingSso}
+              onDismissError={() => setSsoError(null)}
+              onLogin={login}
+            />
+          )}
         </Stack.Screen>
       ) : (
         <>
