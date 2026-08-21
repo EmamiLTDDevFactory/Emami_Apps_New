@@ -18,7 +18,11 @@ const dotenv = require('dotenv');
 const archiver = require('archiver');
 
 const REGION = process.env.AWS_REGION || 'ap-south-1';
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://apps.emamiapps.in';
+// This is the real deployed hub domain (see App.tsx's canonical/og:url tags, sitemap.xml,
+// robots.txt) — a stale 'apps.emamiapps.in' default here previously meant the Lambda Function
+// URL's own CORS config (set only once, at first creation) would silently reject fetch calls
+// from the actual site unless this env var was set explicitly at deploy time.
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://www.emamiapps.in';
 
 const BACKENDS = [
   {
