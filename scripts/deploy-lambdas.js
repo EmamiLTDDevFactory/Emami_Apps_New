@@ -24,12 +24,22 @@ const REGION = process.env.AWS_REGION || 'ap-south-1';
 // from the actual site unless this env var was set explicitly at deploy time.
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://www.emamiapps.in';
 
-// hub-auth used to be deployed as a Lambda here too, but its Function URL hit an unresolved
-// AWS-account-level access issue (public traffic getting a 403 despite correct config). The
-// EmamiApps hub's Microsoft login now lives on the mouldhealthcheck Azure App Service instead —
-// see embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section — which
-// isn't deployed by this script (deployment matches however that App Service already deploys).
+// hub-auth's Function URL hit an unresolved AWS-account-level access issue (public traffic
+// getting a 403 despite correct config), so login moved off it entirely — the EmamiApps hub's
+// Microsoft sign-in now lives on the mouldhealthcheck Azure App Service instead (see
+// embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section). This Lambda
+// is still deployed here, though: it now serves only the Manage Access API (Postgres-backed
+// authorized-user/app-grant storage, see backend/server.js) — a different EXPO_PUBLIC_* env var
+// (below) than the one login uses, since they're two unrelated backends now.
 const BACKENDS = [
+  {
+    name: 'hub-auth',
+    functionName: 'emami-apps-hub-auth',
+    dir: path.join(__dirname, '..', 'backend'),
+    frontendEnvFile: path.join(__dirname, '..', '.env'),
+    frontendEnvKey: 'EXPO_PUBLIC_ACCESS_API_URL',
+    frontendEnvSuffix: '/api',
+  },
   {
     name: 'non-ctc-expense',
     functionName: 'emami-apps-non-ctc-expense',
