@@ -87,21 +87,6 @@ export const CURRENT_USER = {
   lastLogin: 'Today, 9:42 AM',
 };
 
-// Seed data for the "Manage Access" screen. This is a placeholder allow-list
-// only — there is no backend or auth enforcement behind it yet. It exists so
-// the admin-facing entry point (per-user, per-app access) is in place before
-// the real access-control system (roles, invites, SSO sync) is designed.
-export interface UserAccessEntry {
-  email: string;
-  /** App ids (see APPS) this user is granted access to. */
-  appIds: string[];
-}
-
-export const AUTHORIZED_USERS: UserAccessEntry[] = [
-  { email: 'sudiptoroy@emamigroup.com', appIds: APPS.map((a) => a.id) },
-  { email: 'admin@emamigroup.com', appIds: APPS.map((a) => a.id) },
-];
-
 export const ACTIVITY_STATS = {
   sessionsTotal: 1,
   logins: 1,

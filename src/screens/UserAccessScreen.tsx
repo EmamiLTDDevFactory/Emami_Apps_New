@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Mail, Plus, ShieldCheck, Trash2, Info, Check } from 'lucide-react-native';
 import ScreenScaffold from '../components/ScreenScaffold';
-import { APPS, AUTHORIZED_USERS, type UserAccessEntry } from '../data/mockData';
+import { APPS } from '../data/mockData';
+import type { UserAccessEntry } from '../types';
 import { colors, fonts, radii, appColor } from '../theme/tokens';
+import { listAuthorizedUsers, addAuthorizedUser, removeAuthorizedUser, setAppAccess } from '../lib/accessApi';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,11 +14,23 @@ export default function UserAccessScreen() {
   const [query, setQuery] = useState('');
   const navigation = useNavigation();
 
-  const [users, setUsers] = useState<UserAccessEntry[]>(AUTHORIZED_USERS);
+  const [users, setUsers] = useState<UserAccessEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
 
-  const addUser = () => {
+  useEffect(() => {
+    listAuthorizedUsers().then((result) => {
+      setLoading(false);
+      if (result.ok && result.users) {
+        setUsers(result.users);
+      } else {
+        setError(result.error || 'Could not load authorized users.');
+      }
+    });
+  }, []);
+
+  const addUser = async () => {
     const value = input.trim().toLowerCase();
     if (!value) return;
     if (!EMAIL_RE.test(value)) {
@@ -27,26 +41,42 @@ export default function UserAccessScreen() {
       setError('This email already has access.');
       return;
     }
+    setError('');
     // New users start with no modules granted — admin picks exactly which
     // apps this person should see, rather than defaulting to full access.
+    const result = await addAuthorizedUser(value);
+    if (!result.ok) {
+      setError(result.error || 'Could not add this user.');
+      return;
+    }
     setUsers((prev) => [...prev, { email: value, appIds: [] }]);
     setInput('');
-    setError('');
   };
 
-  const removeUser = (email: string) => {
+  const removeUser = async (email: string) => {
+    const result = await removeAuthorizedUser(email);
+    if (!result.ok) {
+      setError(result.error || 'Could not remove this user.');
+      return;
+    }
     setUsers((prev) => prev.filter((u) => u.email !== email));
   };
 
-  const toggleApp = (email: string, appId: string) => {
+  const toggleApp = async (email: string, appId: string) => {
+    const user = users.find((u) => u.email === email);
+    if (!user) return;
+    const granted = !user.appIds.includes(appId);
+    const result = await setAppAccess(email, appId, granted);
+    if (!result.ok) {
+      setError(result.error || 'Could not update access.');
+      return;
+    }
     setUsers((prev) =>
       prev.map((u) =>
         u.email === email
           ? {
               ...u,
-              appIds: u.appIds.includes(appId)
-                ? u.appIds.filter((id) => id !== appId)
-                : [...u.appIds, appId],
+              appIds: granted ? [...u.appIds, appId] : u.appIds.filter((id) => id !== appId),
             }
           : u
       )
@@ -67,8 +97,8 @@ export default function UserAccessScreen() {
         <View style={styles.noticeCard}>
           <Info size={15} color={colors.rust} />
           <Text style={styles.noticeText}>
-            This is an early preview. Per-app access set here isn't enforced by any backend
-            yet — full role-based permissions, invite emails and SSO sync are being designed next.
+            Grants set here are saved to the database. Full role-based permissions, invite
+            emails and enforcement of per-app access elsewhere in the app are still being designed.
           </Text>
         </View>
 
@@ -105,6 +135,9 @@ export default function UserAccessScreen() {
           </View>
           {!!error && <Text style={styles.errorText}>{error}</Text>}
 
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.rust} style={styles.loadingIndicator} />
+          ) : (
           <View style={styles.list}>
             {users.map((user, i) => (
               <View key={user.email} style={[styles.userRow, i < users.length - 1 && styles.userRowBorder]}>
@@ -154,6 +187,7 @@ export default function UserAccessScreen() {
               </View>
             ))}
           </View>
+          )}
         </View>
       </ScrollView>
     </ScreenScaffold>
@@ -285,6 +319,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansMedium,
     color: '#C0392B',
     marginTop: 8,
+  },
+  loadingIndicator: {
+    marginTop: 18,
   },
   list: {
     marginTop: 18,

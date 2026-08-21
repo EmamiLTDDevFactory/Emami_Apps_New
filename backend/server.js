@@ -6,6 +6,7 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const saml = require('samlify');
+const { pool, testConnection } = require('./db');
 
 // samlify's default schema validator shells out to the `xmllint` binary,
 // which doesn't exist on Lambda. Skipping it is the documented workaround
@@ -147,11 +148,95 @@ apiRouter.post('/auth/session/verify', (req, res) => {
     }
 });
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Manage Access — list every authorized user with the app ids granted to them. */
+apiRouter.get('/access/users', async (req, res) => {
+    try {
+        const { rows } = await pool.query(`
+            SELECT au.email,
+                   COALESCE(array_agg(a.app_id) FILTER (WHERE a.app_id IS NOT NULL), '{}') AS app_ids
+            FROM emami_apps.authorized_users au
+            LEFT JOIN emami_apps.authorized_user_apps a ON a.email = au.email
+            GROUP BY au.email, au.created_at
+            ORDER BY au.created_at ASC
+        `);
+        res.json({ success: true, users: rows.map((r) => ({ email: r.email, appIds: r.app_ids })) });
+    } catch (err) {
+        console.error('[access] Failed to list authorized users:', err.message);
+        res.status(500).json({ success: false, error: 'Could not load authorized users.' });
+    }
+});
+
+/** Grant a brand-new email access to the hub (with no apps granted yet). */
+apiRouter.post('/access/users', async (req, res) => {
+    const email = (req.body?.email || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+        return res.status(400).json({ success: false, error: 'Enter a valid email address.' });
+    }
+    try {
+        const { rows } = await pool.query(
+            'INSERT INTO emami_apps.authorized_users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING RETURNING email',
+            [email]
+        );
+        if (rows.length === 0) {
+            return res.status(409).json({ success: false, error: 'This email already has access.' });
+        }
+        res.json({ success: true, email, appIds: [] });
+    } catch (err) {
+        console.error('[access] Failed to add authorized user:', err.message);
+        res.status(500).json({ success: false, error: 'Could not add this user.' });
+    }
+});
+
+/** Revoke a user entirely — cascades to remove all of their app grants too. */
+apiRouter.delete('/access/users/:email', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM emami_apps.authorized_users WHERE email = $1', [req.params.email.toLowerCase()]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[access] Failed to remove authorized user:', err.message);
+        res.status(500).json({ success: false, error: 'Could not remove this user.' });
+    }
+});
+
+/** Grant one app to an existing authorized user. */
+apiRouter.post('/access/users/:email/apps/:appId', async (req, res) => {
+    try {
+        await pool.query(
+            'INSERT INTO emami_apps.authorized_user_apps (email, app_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [req.params.email.toLowerCase(), req.params.appId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        if (err.code === '23503') {
+            return res.status(404).json({ success: false, error: 'That user is not authorized.' });
+        }
+        console.error('[access] Failed to grant app access:', err.message);
+        res.status(500).json({ success: false, error: 'Could not grant access.' });
+    }
+});
+
+/** Revoke one app from an existing authorized user. */
+apiRouter.delete('/access/users/:email/apps/:appId', async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM emami_apps.authorized_user_apps WHERE email = $1 AND app_id = $2',
+            [req.params.email.toLowerCase(), req.params.appId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[access] Failed to revoke app access:', err.message);
+        res.status(500).json({ success: false, error: 'Could not revoke access.' });
+    }
+});
+
 apiRouter.get('/health', (req, res) => res.json({ success: true }));
 
 if (require.main === module) {
     app.listen(port, () => {
         console.log(`Emami Apps hub auth backend listening on port ${port}`);
+        testConnection();
     });
 }
 

@@ -34,3 +34,9 @@ export interface NavItem {
 
 export type SortOption = 'Alphabetical' | 'Most Used' | 'Recently Used';
 export type CategoryFilter = 'All' | Category;
+
+export interface UserAccessEntry {
+  email: string;
+  /** App ids (see AppItem) this user is granted access to. */
+  appIds: string[];
+}
