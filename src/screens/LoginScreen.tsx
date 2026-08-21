@@ -19,14 +19,17 @@ interface LoginScreenProps {
 }
 
 /**
- * TEMPORARY — real Microsoft SSO is fully built (backend/server.js is a working SAML SP), but
- * can't complete end-to-end yet: Infra hasn't handed back the IdP metadata XML, and separately the
- * deployed Lambda's Function URL is returning 403 on all public traffic (an AWS-account-level
- * access issue, unrelated to this app's code). Until BOTH are resolved, gate on nothing but "did
- * they type something email-shaped" so the hub isn't fully locked out in the meantime.
- * TO REVERT: set this back to false once SSO is confirmed working end-to-end.
+ * TEMPORARY — real Microsoft SSO is fully built and confirmed working on the request side
+ * (backend/server.js is a working SAML SP; a local test click-through reached Emami's actual
+ * branded Microsoft login page). It can't reliably complete end-to-end in production yet though:
+ * the deployed Lambda's Function URL intermittently/currently returns 403 on public traffic (an
+ * AWS-account-level access issue, unrelated to this app's code, still being chased with AWS).
+ * Rather than gate on one or the other, both sign-in options are offered side by side — "Sign in
+ * with Microsoft" for whoever it works for, "Continue with Temporary Access" as a guaranteed
+ * fallback that never depends on the Lambda. TO REVERT: set this back to false and remove the
+ * temporary-access button once the Function URL issue is resolved for good.
  */
-const TEMP_ALLOW_ANY_EMAIL = true;
+const SHOW_TEMP_SIGNIN = true;
 
 const APPS_GRADIENT = ['#2563EB', '#7C3AED', '#16A34A', '#F59E0B', '#DB2777'] as const;
 
@@ -89,43 +92,19 @@ function MicrosoftGlyph() {
   );
 }
 
-const EMAMI_DOMAIN = '@emamigroup.com';
-
 export default function LoginScreen({ error, verifying, onDismissError, onLogin }: LoginScreenProps) {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [localError, setLocalError] = useState('');
 
   const trimmedEmail = email.trim().toLowerCase();
-  const isEmamiDomain = trimmedEmail.endsWith(EMAMI_DOMAIN) && trimmedEmail.length > EMAMI_DOMAIN.length;
   const looksLikeEmail = /^\S+@\S+\.\S+$/.test(trimmedEmail);
 
-  const signIn = () => {
+  // Independent of the email field — Microsoft's own sign-in page asks for the account, and
+  // backend/server.js's ACS handler enforces the @emamigroup.com domain check server-side.
+  const signInWithMicrosoft = () => {
     setLocalError('');
     onDismissError?.();
-
-    if (!trimmedEmail) {
-      setLocalError('Enter your email to continue.');
-      return;
-    }
-
-    if (TEMP_ALLOW_ANY_EMAIL) {
-      if (!looksLikeEmail) {
-        setLocalError('Enter a valid email address to continue.');
-        return;
-      }
-      onLogin?.();
-      return;
-    }
-
-    if (!isEmamiDomain) {
-      // Only @emamigroup.com accounts are set up on the SSO side (see
-      // backend/server.js) — no point round-tripping through Microsoft for a
-      // domain that can never pass, so this is caught client-side too.
-      setLocalError('Only @emamigroup.com accounts can sign in. Please contact IT.');
-      return;
-    }
-
     const url = getMicrosoftSignInUrl();
     if (Platform.OS === 'web') {
       window.location.href = url;
@@ -134,6 +113,20 @@ export default function LoginScreen({ error, verifying, onDismissError, onLogin 
       // wired up yet — this app is served as a web hub today.
       Linking.openURL(url).catch(() => {});
     }
+  };
+
+  const continueTemporarily = () => {
+    setLocalError('');
+    onDismissError?.();
+    if (!trimmedEmail) {
+      setLocalError('Enter your email to continue.');
+      return;
+    }
+    if (!looksLikeEmail) {
+      setLocalError('Enter a valid email address to continue.');
+      return;
+    }
+    onLogin?.();
   };
 
   const shownError = error || localError;
@@ -175,39 +168,51 @@ export default function LoginScreen({ error, verifying, onDismissError, onLogin 
           <View style={styles.card}>
             <Text style={styles.welcome}>{verifying ? 'Signing you in…' : 'Welcome back'}</Text>
             <Text style={styles.subtitle}>
-              {verifying ? 'Verifying your Microsoft sign-in.' : 'Enter your email to continue'}
+              {verifying ? 'Verifying your Microsoft sign-in.' : 'Choose how you’d like to sign in'}
             </Text>
 
             {verifying ? (
               <ActivityIndicator size="small" color={colors.plumDeep} style={{ marginTop: 10 }} />
             ) : (
               <>
-                <TextInput
-                  style={styles.input}
-                  value={email}
-                  onChangeText={(v) => { setEmail(v); setLocalError(''); onDismissError?.(); }}
-                  placeholder="you@emamigroup.com"
-                  placeholderTextColor={colors.inkSoft}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  onSubmitEditing={signIn}
-                />
-
                 {!!shownError && <Text style={styles.error}>{shownError}</Text>}
 
-                <Pressable onPress={signIn} style={styles.primaryBtn}>
-                  {!TEMP_ALLOW_ANY_EMAIL && isEmamiDomain && <MicrosoftGlyph />}
-                  <Text style={styles.primaryBtnText}>
-                    {!TEMP_ALLOW_ANY_EMAIL && isEmamiDomain ? 'Sign in with Microsoft' : 'Sign In'}
-                  </Text>
+                <Pressable onPress={signInWithMicrosoft} style={styles.primaryBtn}>
+                  <MicrosoftGlyph />
+                  <Text style={styles.primaryBtnText}>Sign in with Microsoft</Text>
                 </Pressable>
+
+                {SHOW_TEMP_SIGNIN && (
+                  <>
+                    <View style={styles.dividerRow}>
+                      <View style={styles.dividerLine} />
+                      <Text style={styles.dividerText}>OR</Text>
+                      <View style={styles.dividerLine} />
+                    </View>
+
+                    <TextInput
+                      style={styles.input}
+                      value={email}
+                      onChangeText={(v) => { setEmail(v); setLocalError(''); onDismissError?.(); }}
+                      placeholder="you@company.com"
+                      placeholderTextColor={colors.inkSoft}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      onSubmitEditing={continueTemporarily}
+                    />
+
+                    <Pressable onPress={continueTemporarily} style={styles.secondaryBtn}>
+                      <Text style={styles.secondaryBtnText}>Continue with Temporary Access</Text>
+                    </Pressable>
+                  </>
+                )}
               </>
             )}
 
             <Text style={styles.helper}>
-              {TEMP_ALLOW_ANY_EMAIL
-                ? 'Temporary open access while Microsoft sign-in is being finished.'
+              {SHOW_TEMP_SIGNIN
+                ? 'Microsoft sign-in is being finalized — use Temporary Access if it doesn’t complete.'
                 : 'Only @emamigroup.com accounts can sign in. No access? Contact IT.'}
             </Text>
           </View>
@@ -413,6 +418,41 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansSemiBold,
     fontSize: 14.5,
     color: colors.white,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    gap: 10,
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 10.5,
+    letterSpacing: 0.8,
+    color: colors.inkSoft,
+  },
+  secondaryBtn: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cream2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    paddingVertical: 14,
+    marginTop: 10,
+  },
+  secondaryBtnText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14.5,
+    color: colors.ink,
   },
   msGlyph: {
     width: 16,
