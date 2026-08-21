@@ -2,11 +2,13 @@
   "name": "emami-hub-auth-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "EmamiApps hub Manage Access API (Postgres-backed authorized-user/app-grant storage) — deployed as an AWS Lambda (see lambda.js) via scripts/deploy-lambdas.js, same pattern as the non-ctc-expense/rc-portal backends. Login itself moved to embedded-apps/mouldhealthcheck/backend/server.js.",
+  "description": "EmamiApps hub login (OAuth2/OIDC, see hub-auth.js) and Manage Access API (Postgres-backed authorized-user/app-grant storage) — deployed as an AWS Lambda (see lambda.js) via scripts/deploy-lambdas.js, fronted by API Gateway (not a Function URL, which was blocked by an unresolved AWS-account-level access issue).",
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^3.2.0",
     "pg": "^8.13.1",
     "serverless-http": "^4.0.0"
   },

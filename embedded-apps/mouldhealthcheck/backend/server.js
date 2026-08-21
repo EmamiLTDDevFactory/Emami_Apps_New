@@ -189,11 +189,6 @@ app.use('/', apiRouter);
 app.use('/api/NGD', apiRouter);
 app.use('/api/users', apiRouter);
 
-// EmamiApps hub login (Microsoft OAuth2/OIDC) — NOT a mouldhealthcheck feature, just mounted
-// here because this App Service is existing, working Azure infra. Fully self-contained in
-// ./hub-auth.js; only reuses CLIENT_ID/CLIENT_SECRET from the SAP config above.
-apiRouter.use(require('./hub-auth')({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET }));
-
 apiRouter.get("/admin/log", async (req, res) => {
 
     try {

@@ -1,12 +1,10 @@
-// Talks to the EmamiApps hub login endpoints — co-hosted on the mouldhealthcheck Azure App
-// Service (embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section), not
-// a dedicated backend. That's a deliberate choice: it reuses existing, working Azure
-// infrastructure and the SAP integration's own app registration, sidestepping the AWS Lambda
-// Function URL this used to run on (blocked by an unresolved AWS-account-level access issue).
-// Login happens via Microsoft OAuth2/OIDC — this file only points the browser at the backend's
-// redirect and asks it to verify the session token that redirect hands back afterward.
-const AUTH_API_URL = process.env.EXPO_PUBLIC_AUTH_API_URL
-  || 'https://emdcindpwebapp1-bag2gfhjd9d4gkh6.centralindia-01.azurewebsites.net';
+// Talks to the EmamiApps hub login endpoints on the hub-auth Lambda (backend/server.js,
+// backend/hub-auth.js), fronted by API Gateway rather than a Lambda Function URL — the Function
+// URL was blocked by an unresolved AWS-account-level access issue (public traffic getting a 403
+// despite correct config); API Gateway uses a different invoke mechanism that sidesteps it
+// entirely. Login happens via Microsoft OAuth2/OIDC — this file only points the browser at the
+// backend's redirect and asks it to verify the session token that redirect hands back afterward.
+const AUTH_API_URL = process.env.EXPO_PUBLIC_AUTH_API_URL || 'http://localhost:4000/api';
 
 /** Full-page navigation target for "Sign in with Microsoft" — not an XHR call. */
 export function getMicrosoftSignInUrl(): string {

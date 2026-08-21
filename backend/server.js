@@ -7,11 +7,12 @@ const { pool, testConnection } = require('./db');
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Login itself moved to OAuth2/OIDC on the mouldhealthcheck Azure App Service (see
-// embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section) — this Lambda
-// previously ran a SAML SP for it, removed after its Function URL hit an unresolved
-// AWS-account-level 403 on all public traffic. This Lambda is still very much in use though: the
-// Manage Access endpoints below (backed by Postgres) live here.
+// This Lambda previously ran a SAML SP for login, then briefly moved login to OAuth2 on the
+// mouldhealthcheck Azure App Service — that turned out to be Basis-owned infra provisioned for
+// Mould's SAP APIs specifically, not something this team can deploy unrelated code onto. Login
+// is back here now (see ./hub-auth.js), fronted by API Gateway instead of a Lambda Function URL
+// (which was blocked by an unresolved AWS-account-level access issue). The Manage Access
+// endpoints below (backed by Postgres) have been here the whole time.
 const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN || 'http://localhost:8081')
     .split(',')
     .map((o) => o.trim())
@@ -22,6 +23,8 @@ app.use(express.json({ limit: '10kb' }));
 
 const apiRouter = express.Router();
 app.use('/api', apiRouter);
+
+apiRouter.use(require('./hub-auth'));
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

@@ -24,21 +24,18 @@ const REGION = process.env.AWS_REGION || 'ap-south-1';
 // from the actual site unless this env var was set explicitly at deploy time.
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://www.emamiapps.in';
 
-// hub-auth's Function URL hit an unresolved AWS-account-level access issue (public traffic
-// getting a 403 despite correct config), so login moved off it entirely — the EmamiApps hub's
-// Microsoft sign-in now lives on the mouldhealthcheck Azure App Service instead (see
-// embedded-apps/mouldhealthcheck/backend/server.js, "EMAMIAPPS HUB LOGIN" section). This Lambda
-// is still deployed here, though: it now serves only the Manage Access API (Postgres-backed
-// authorized-user/app-grant storage, see backend/server.js) — a different EXPO_PUBLIC_* env var
-// (below) than the one login uses, since they're two unrelated backends now.
+// hub-auth's Lambda Function URL hit an unresolved AWS-account-level access issue (public
+// traffic getting a 403 despite correct config) — it's fronted by an API Gateway HTTP API
+// instead now (created manually, see backend/hub-auth.js), which this script doesn't manage.
+// skipFunctionUrl: true below means this entry still updates the Lambda's CODE (useful — keep
+// running this to ship changes), but does NOT touch/create a Function URL or overwrite the
+// frontend .env — that .env value must point at the API Gateway invoke URL, set manually.
 const BACKENDS = [
   {
     name: 'hub-auth',
     functionName: 'emami-apps-hub-auth',
     dir: path.join(__dirname, '..', 'backend'),
-    frontendEnvFile: path.join(__dirname, '..', '.env'),
-    frontendEnvKey: 'EXPO_PUBLIC_ACCESS_API_URL',
-    frontendEnvSuffix: '/api',
+    skipFunctionUrl: true,
   },
   {
     name: 'non-ctc-expense',
@@ -128,6 +125,11 @@ async function deployBackend(lambda, iam, backend) {
     await waitUntilFunctionUpdatedV2({ client: lambda, maxWaitTime: 60 }, { FunctionName: backend.functionName });
   }
   fs.unlinkSync(zipPath);
+
+  if (backend.skipFunctionUrl) {
+    console.log(`[${backend.name}] code updated — Function URL/frontend .env intentionally left untouched (fronted by API Gateway instead, managed separately).`);
+    return;
+  }
 
   let functionUrl;
   try {
