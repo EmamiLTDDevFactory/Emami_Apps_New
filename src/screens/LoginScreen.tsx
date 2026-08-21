@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, KeyboardAvoidingView,
+  View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
   Platform, ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
 import { BadgeCheck } from 'lucide-react-native';
@@ -78,11 +78,32 @@ function MicrosoftGlyph() {
   );
 }
 
+const EMAMI_DOMAIN = '@emamigroup.com';
+
 export default function LoginScreen({ error, verifying, onDismissError }: LoginScreenProps) {
   const insets = useSafeAreaInsets();
+  const [email, setEmail] = useState('');
+  const [localError, setLocalError] = useState('');
+
+  const trimmedEmail = email.trim().toLowerCase();
+  const isEmamiDomain = trimmedEmail.endsWith(EMAMI_DOMAIN) && trimmedEmail.length > EMAMI_DOMAIN.length;
 
   const signIn = () => {
+    setLocalError('');
     onDismissError?.();
+
+    if (!trimmedEmail) {
+      setLocalError('Enter your email to continue.');
+      return;
+    }
+    if (!isEmamiDomain) {
+      // Only @emamigroup.com accounts are set up on the SSO side (see
+      // backend/server.js) — no point round-tripping through Microsoft for a
+      // domain that can never pass, so this is caught client-side too.
+      setLocalError('Only @emamigroup.com accounts can sign in. Please contact IT.');
+      return;
+    }
+
     const url = getMicrosoftSignInUrl();
     if (Platform.OS === 'web') {
       window.location.href = url;
@@ -92,6 +113,8 @@ export default function LoginScreen({ error, verifying, onDismissError }: LoginS
       Linking.openURL(url).catch(() => {});
     }
   };
+
+  const shownError = error || localError;
 
   return (
     <View style={styles.root}>
@@ -130,18 +153,32 @@ export default function LoginScreen({ error, verifying, onDismissError }: LoginS
           <View style={styles.card}>
             <Text style={styles.welcome}>{verifying ? 'Signing you in…' : 'Welcome back'}</Text>
             <Text style={styles.subtitle}>
-              {verifying ? 'Verifying your Microsoft sign-in.' : 'Sign in with your Emami Microsoft work account'}
+              {verifying ? 'Verifying your Microsoft sign-in.' : 'Enter your email to continue'}
             </Text>
-
-            {!!error && <Text style={styles.error}>{error}</Text>}
 
             {verifying ? (
               <ActivityIndicator size="small" color={colors.plumDeep} style={{ marginTop: 10 }} />
             ) : (
-              <Pressable onPress={signIn} style={styles.primaryBtn}>
-                <MicrosoftGlyph />
-                <Text style={styles.primaryBtnText}>Sign in with Microsoft</Text>
-              </Pressable>
+              <>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(v) => { setEmail(v); setLocalError(''); onDismissError?.(); }}
+                  placeholder="you@emamigroup.com"
+                  placeholderTextColor={colors.inkSoft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  onSubmitEditing={signIn}
+                />
+
+                {!!shownError && <Text style={styles.error}>{shownError}</Text>}
+
+                <Pressable onPress={signIn} style={styles.primaryBtn}>
+                  {isEmamiDomain && <MicrosoftGlyph />}
+                  <Text style={styles.primaryBtnText}>{isEmamiDomain ? 'Sign in with Microsoft' : 'Sign In'}</Text>
+                </Pressable>
+              </>
             )}
 
             <Text style={styles.helper}>Only @emamigroup.com accounts can sign in. No access? Contact IT.</Text>
@@ -311,6 +348,19 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 24,
     textAlign: 'center',
+  },
+  input: {
+    width: '100%',
+    backgroundColor: colors.cream2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontFamily: fonts.sansMedium,
+    fontSize: 14.5,
+    color: colors.ink,
+    marginBottom: 8,
   },
   error: {
     width: '100%',
